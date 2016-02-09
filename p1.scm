@@ -1,4 +1,4 @@
-; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <epxression>) state) -> state
+; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <expression>) state) -> state
 
 ; M_state_assign: implemented for (= ...) calls; (M_state_assign '(= name <expression>) state) -> state
 
@@ -7,10 +7,21 @@
 ; M_boolean_assign: implemented for (= ...) calls; (M_boolean_assign '(= name <expression>) state) -> bvalue (or error if expression is <numeric>)
 
 ; M_value_math: implemented for ({+,-,*,/,%} ...) calls; (M_value_math '(<math_op> <numeric> <numeric>) state) -> nvalue
+(define M_value_math
+  (lambda (expression)
+    (cond
+      ((number? expression) expression)
+      ((eq? '+ (get_vars expression)) (+ (M_value_math (get_values expression)) (M_value_math (get_exp_last expression))))
+      ((eq? '- (get_vars expression)) (- (M_value_math (get_values expression)) (M_value_math (get_exp_last expression))))
+      ((eq? '* (get_vars expression)) (* (M_value_math (get_values expression)) (M_value_math (get_exp_last expression))))
+      ((eq? '/ (get_vars expression)) (quotient (M_value_math (get_values expression)) (M_value_math (get_exp_last expression))))
+      ((eq? '% (get_vars expression)) (remainder (M_value_math (get_values expression)) (M_value_math (get_exp_last expression))))
+      (else (error 'unknown "improper expression")))))
 
 ; M_boolean_logic: implemented for ({&&, ||} ...) calls; (M_value_boolean '(<bool_op> <condition> <condition>) state) -> bvalue
 
 ; M_boolean_comparison: implemented for ({<,>,<=,>=,==,!=} ...) calls; (M_boolean_comparison '(<comp_op> <numeric> <numeric>) state) -> bvalue
+; *** Most likely will call _logic
 
 ; M_value_return: implemented for (return ...); note: return does not need an M_state, as the state doesn't matter after return; (M_value_return '(return <expression>) state) -> value
 
@@ -22,13 +33,16 @@
 
 ; M_value_expression: dispatches M_value to the proper M_value_(expresion) (error if value is not defined for that expression)
 
-; M_boolean_expressin: dispatches M_boolean to the proper M_boolean_(expression) (error if boolean is not defined for that expression)
+; M_boolean_expression: dispatches M_boolean to the proper M_boolean_(expression) (error if boolean is not defined for that expression)
 
 ; The state: '((var1, var2, ...) (value1, value2, ...))
 
 (define get_empty_state
   (lambda ()
     '(() ())))
+
+; pulls third ("last") value in expressions
+(define get_exp_last caddr)
 
 (define get_first_var caar)
 (define get_first_value caadr)
