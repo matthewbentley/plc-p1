@@ -14,8 +14,6 @@
 
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
 
-; M_boolean_assign: implemented for (= ...) calls; (M_boolean_assign '(= name <expression>) state) -> bvalue (or error if expression is <numeric>)
-
 ; M_value_math: implemented for ({+,-,*,/,%} ...) calls; (M_value_math '(<math_op> <numeric> <numeric>) state) -> nvalue
 
 ; M_boolean_logic: implemented for ({&&, ||} ...) calls; (M_value_boolean '(<bool_op> <condition> <condition>) state) -> bvalue
@@ -48,7 +46,9 @@
       ((eq? keyword 'return) M_value_return)
       ((eq? keyword 'if) (error 'no_value "If cannot be used as a value"))
       ((eq? keyword 'while) (error 'no_value "While cannot be used as a value"))
-      ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)) M_value_math)
+      ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)
+           (eq? keyword '<) (eq? keyword '>) (eq? keyword '<=) (eq? keyword '>=) (eq? keyword '==) (eq? keyword '!=)
+           (eq? keyword '||) (eq? keyword '&&)) M_value_exp)
       (else (error 'keyword "Unknown or unimplemented keyword")))))
 
 (define M_value
@@ -76,19 +76,7 @@
       ((number? expresion) s) ; No change in state from a number
       (else ((state_dispatch (get_op expression)) expression s)))))
 
-(define boolean_dispatch
-  (lambda (expression s)
-    (cond
-      ((eq? keyword 'var) M_boolean_var)
-      ((eq? keyword '=) M_boolean_assign)
-      ((eq? keyword 'return) M_boolean_return)
-      ((eq? keyword 'if) (error 'no_value "If does not have a truthiness"))
-      ((eq? keyword 'while) (error 'no_value "While does not have a thruthiness"))
-      ((or (eq? keyword '||) (eq? keyword '&&)) M_boolean_exp)
-      ((or (eq? keyword '<) (eq? keyword '>) (eq? keyword '<=) (eq? keyword '>=) (eq? keyword '==) (eq? keyword '!=)) M_boolean_compare)
-      (else (error 'keyword "Unknown or unimplemented keyword")))))
-
-(define M_boolean
+(define M_value_boolean
   (lambda (expression s)
     (cond
       ((null? expression) (error 'null "You cannot get the value of null"))
