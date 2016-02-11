@@ -1,5 +1,17 @@
 ; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <epxression>) state) -> state
 
+(define M_state_var
+  (lambda (declare s)
+      (add_to_state s (var_name declare) (M_value (declare_experssion declare)))))
+
+; declare_experssion: returns the expression of a declare if one exists from the format '(var name <experssion>)
+;    helper for M_state_var
+(define declare_experssion caddr)
+       
+; var_name: returns the name of a var from a declare statement        
+;    helper for M_state_var        
+(define var_name cadr)
+
 ; M_state_assign: implemented for (= ...) calls; (M_state_assign '(= name <expression>) state) -> state
 
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
@@ -40,7 +52,7 @@
       ((eq? keyword 'if) (error 'no_value "If cannot be used as a value"))
       ((eq? keyword 'while) (error 'no_value "While cannot be used as a value"))
       ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)) M_value_math)
-      (else (error 'keyword "Unknown or unimplemented keyword"))))
+      (else (error 'keyword "Unknown or unimplemented keyword")))))
 
 (define M_value
   (lambda (expression s)
@@ -58,7 +70,7 @@
       ((eq? keyword 'if) M_state_if)
       ((eq? keyword 'while) M_state_while)
       ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)) M_state_math)
-      (else (error 'keyword "Unknown or unimplemented keyword"))))
+      (else (error 'keyword "Unknown or unimplemented keyword")))))
 
 (define M_state
   (lambda (expression s)
