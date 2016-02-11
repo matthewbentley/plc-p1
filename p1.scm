@@ -11,10 +11,27 @@
     (M_value (get_operand2 declare) s)))
 
 ; M_state_assign: implemented for (= ...) calls; (M_state_assign '(= name <expression>) state) -> state
-
+(define M_state_assign
+  (lambda (assign s)
+      (replace_in_state (M_state (get_operand2 assign) s) (get_operand1 assign) (M_value (get_operand2 assign) s))))
+    
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
 
 ; M_value_math: implemented for ({+,-,*,/,%} ...) calls; (M_value_math '(<math_op> <numeric> <numeric>) state) -> nvalue
+(define M_value_math
+  (lambda (expression s)
+      ((get_math_op expression) (M_value (get_operand1 expression) s) (M_value (get_operand2 expression) s))))
+
+; helper for M_value_math
+(define get_math_op
+  (lambda (o)
+    (cond
+      ((eq? '+ o) +)
+      ((eq? '- o) -)
+      ((eq? '* o) *)
+      ((eq? '/ o) quotient)
+      ((eq? '% o) remainder)
+      (else o))))
 
 ; M_boolean_logic: implemented for ({&&, ||} ...) calls; (M_value_boolean '(<bool_op> <condition> <condition>) state) -> bvalue
 
@@ -45,6 +62,11 @@
 ; M_boolean
 
 ; The state: '((var1, var2, ...) (value1, value2, ...))
+
+; M_value_return
+(define M_value_return
+  (lambda (expression s)
+    (M_value (get_operand1 expression) s)))
 
 (define value_dispatch
   (lambda (keyword)
