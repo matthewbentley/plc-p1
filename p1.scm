@@ -22,8 +22,8 @@
   (lambda (expression s)
       ((get_math_op expression) (M_value (get_operand1 expression) s) (M_value (get_operand2 expression) s))))
 
-; helper for M_value_math
-(define get_math_op
+; get_exp_op: returns the functions for any experssion
+(define get_exp_op
   (lambda (o)
     (cond
       ((eq? '+ o) +)
@@ -31,7 +31,30 @@
       ((eq? '* o) *)
       ((eq? '/ o) quotient)
       ((eq? '% o) remainder)
+      ((eq? '< o) <)
+      ((eq? '<= o) <=)
+      ((eq? '> o) >)
+      ((eq? '>= o) >=)
+      ((eq? '== o) ==)
+      ((eq? '&& o) error_and)
+      ((eq? '|| o) error_or)
       (else o))))
+
+; error_and: basic error catching and function in case of nonbooleans
+
+(define error_and
+  (lambda (e1 e2)
+    (if (and (bool? e1) (bool? e2))
+        (and e1 e2)
+        (error 'type "Operand 1 and 2 for and were not booleans"))))
+
+; error_or: basic error catching or function in case of nonbooleans
+
+(define error_or
+  (lambda (e1 e2)
+    (if (and (bool? e1) (bool? e2))
+        (or e1 e2)
+        (error 'type "Operand 1 and 2 for or were not booleans"))))
 
 ; M_boolean_logic: implemented for ({&&, ||} ...) calls; (M_value_boolean '(<bool_op> <condition> <condition>) state) -> bvalue
 
