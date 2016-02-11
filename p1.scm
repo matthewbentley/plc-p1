@@ -2,13 +2,13 @@
 
 (define M_state_var
   (lambda (declare s)
-      (add_to_state s (var_name declare) (M_value (declare_experssion declare)))))
+      (add_to_state s (var_name declare) (M_value (declare_experssion declare) s))))
 
 ; M_value_var: implemented for (var ...) calls; (M_value_var '(var name)) | (M_value_var '(var name <epxression>)) -> value
 
 (define M_value_var
-  (lambda (declare)
-    (M_value (declare_expression declare))))
+  (lambda (declare s)
+    (M_value (declare_expression declare) s)))
 
 ; declare_experssion: returns the expression of a declare if one exists from the format '(var name <experssion>)
 ;    helper for M_var
