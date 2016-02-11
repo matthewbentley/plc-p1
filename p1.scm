@@ -84,13 +84,6 @@
       ((number? expresion) s) ; No change in state from a number
       (else ((state_dispatch (get_op expression)) expression s)))))
 
-(define M_value_boolean
-  (lambda (expression s)
-    (cond
-      ((null? expression) (error 'null "You cannot get the value of null"))
-      ((bool? expression) expression)
-      (else ((boolean_dispatch (get_op expression)) expression s)))))
-
 (define bool?
   (lambda (b)
     (or (eq? b #t) (eq? b #f))))
