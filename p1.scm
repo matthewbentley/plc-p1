@@ -26,6 +26,75 @@
 
 ; The state: '((var1, var2, ...) (value1, value2, ...))
 
+; M_value_return
+(define M_value_return
+  (lambda (expression s)
+    (M_value (get_operand1 expression) s)))
+
+(define value_dispatch
+  (lambda (keyword)
+    (cond
+      ((eq? keyword 'var) M_value_var)
+      ((eq? keyword '=) M_value_assign)
+      ((eq? keyword 'return) M_value_return)
+      ((eq? keyword 'if) (error 'no_value "If cannot be used as a value"))
+      ((eq? keyword 'while) (error 'no_value "While cannot be used as a value"))
+      ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)) M_value_math)
+      (else (error 'keyword "Unknown or unimplemented keyword"))))
+
+(define M_value
+  (lambda (expression s)
+    (cond
+      ((null? expression) (error 'null "You cannot get the value of null"))
+      ((number? expression) expression)
+      (else ((value_dispatch (get_op expression)) expression s)))))
+
+(define state_dispatch
+  (lambda (keyword)
+    (cond
+      ((eq? keyword 'var) M_state_var)
+      ((eq? keyword '=) M_state_assign)
+      ((eq? keyword 'return) M_state_return)
+      ((eq? keyword 'if) M_state_if)
+      ((eq? keyword 'while) M_state_while)
+      ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)) M_state_math)
+      (else (error 'keyword "Unknown or unimplemented keyword"))))
+
+(define M_state
+  (lambda (expression s)
+    (cond
+      ((null? expression) (error 'null "You cannot evaluate null"))
+      ((number? expresion) s) ; No change in state from a number
+      (else ((state_dispatch (get_op expression)) expression s)))))
+
+(define boolean_dispatch
+  (lambda (expression s)
+    (cond
+      ((eq? keyword 'var) M_boolean_var)
+      ((eq? keyword '=) M_boolean_assign)
+      ((eq? keyword 'return) M_boolean_return)
+      ((eq? keyword 'if) (error 'no_value "If does not have a truthiness"))
+      ((eq? keyword 'while) (error 'no_value "While does not have a thruthiness"))
+      ((or (eq? keyword '||) (eq? keyword '&&)) M_boolean_exp)
+      ((or (eq? keyword '<) (eq? keyword '>) (eq? keyword '<=) (eq? keyword '>=) (eq? keyword '==) (eq? keyword '!=)) M_boolean_compare)
+      (else (error 'keyword "Unknown or unimplemented keyword")))))
+
+(define M_boolean
+  (lambda (expression s)
+    (cond
+      ((null? expression) (error 'null "You cannot get the value of null"))
+      ((bool? expression) expression)
+      (else ((boolean_dispatch (get_op expression)) expression s)))))
+
+(define bool?
+  (lambda (b)
+    (or (eq? b #t) (eq? b #f))))
+
+(define get_op car)
+(define get_operand1 cadr)
+(define get_operand2 caddr)
+
+; STATE STUFF
 (define get_empty_state
   (lambda ()
     '(() ())))
