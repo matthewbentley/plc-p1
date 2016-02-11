@@ -56,10 +56,6 @@
         (or e1 e2)
         (error 'type "Operand 1 and 2 for or were not booleans"))))
 
-; M_boolean_logic: implemented for ({&&, ||} ...) calls; (M_value_boolean '(<bool_op> <condition> <condition>) state) -> bvalue
-
-; M_boolean_comparison: implemented for ({<,>,<=,>=,==,!=} ...) calls; (M_boolean_comparison '(<comp_op> <numeric> <numeric>) state) -> bvalue
-
 ; M_value_return: implemented for (return ...); note: return does not need an M_state, as the state doesn't matter after return; (M_value_return '(return <expression>) state) -> value
 
 (define M_value_return
@@ -79,12 +75,20 @@
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
 
 ; M_state:
+(define M_value
+  (lambda (expression s)
+    (cond
+      ((null? expression) (error 'null "You cannot get the value of null"))
+      ((number? expression) expression)
+      (else ((value_dispatch (get_op expression)) expression s)))))
 
 ; M_value
-
-; M_boolean
-
-; The state: '((var1, var2, ...) (value1, value2, ...))
+(define M_state
+  (lambda (expression s)
+    (cond
+      ((null? expression) (error 'null "You cannot evaluate null"))
+      ((number? expresion) s) ; No change in state from a number
+      (else ((state_dispatch (get_op expression)) expression s)))))
 
 ; M_value_return
 (define M_value_return
@@ -104,13 +108,6 @@
            (eq? keyword '||) (eq? keyword '&&)) M_value_exp)
       (else (error 'keyword "Unknown or unimplemented keyword")))))
 
-(define M_value
-  (lambda (expression s)
-    (cond
-      ((null? expression) (error 'null "You cannot get the value of null"))
-      ((number? expression) expression)
-      (else ((value_dispatch (get_op expression)) expression s)))))
-
 (define state_dispatch
   (lambda (keyword)
     (cond
@@ -122,13 +119,6 @@
       ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)) M_state_math)
       (else (error 'keyword "Unknown or unimplemented keyword")))))
 
-(define M_state
-  (lambda (expression s)
-    (cond
-      ((null? expression) (error 'null "You cannot evaluate null"))
-      ((number? expresion) s) ; No change in state from a number
-      (else ((state_dispatch (get_op expression)) expression s)))))
-
 (define bool?
   (lambda (b)
     (or (eq? b #t) (eq? b #f))))
@@ -137,7 +127,10 @@
 (define get_operand1 cadr)
 (define get_operand2 caddr)
 (define get_operand3 cadddr)
+
+
 ; STATE STUFF
+; The state: '((var1, var2, ...) (value1, value2, ...))
 (define get_empty_state
   (lambda ()
     '(() ())))
