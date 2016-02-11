@@ -56,9 +56,9 @@
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
 (define M_state_while
   (lambda (expression s)
-    (cond
-      ((M_value (get_operand1 expression) s) (M_state expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s))))
-      (else (M_state (get_operand1) s)))))
+    (if (M_value (get_operand1 expression) s)
+        (M_state expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s)))
+        ((M_state (get_operand1) s)))))
 
 ; M_state:
 
