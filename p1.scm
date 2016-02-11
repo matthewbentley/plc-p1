@@ -1,22 +1,16 @@
 ; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <expression>) state) -> state
 
 ; M_state_assign: implemented for (= ...) calls; (M_state_assign '(= name <expression>) state) -> state
+(define M_value_assign
+  (lambda (assign state)
+    ((null_state? state) error-thing)
+    (add_to_state (remove_from_state (state cadr assign)) (cadr assign) (M_value_expression caddr))))
 
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
 
 ; M_boolean_assign: implemented for (= ...) calls; (M_boolean_assign '(= name <expression>) state) -> bvalue (or error if expression is <numeric>)
 
 ; M_value_math: implemented for ({+,-,*,/,%} ...) calls; (M_value_math '(<math_op> <numeric> <numeric>) state) -> nvalue
-(define M_value_math
-  (lambda (expression)
-    (cond
-      ((number? expression) expression)
-      ((eq? '+ (get_vars expression)) (+ (M_value_math (get_values expression)) (M_value_math (get_exp_last expression))))
-      ((eq? '- (get_vars expression)) (- (M_value_math (get_values expression)) (M_value_math (get_exp_last expression))))
-      ((eq? '* (get_vars expression)) (* (M_value_math (get_values expression)) (M_value_math (get_exp_last expression))))
-      ((eq? '/ (get_vars expression)) (quotient (M_value_math (get_values expression)) (M_value_math (get_exp_last expression))))
-      ((eq? '% (get_vars expression)) (remainder (M_value_math (get_values expression)) (M_value_math (get_exp_last expression))))
-      (else (error 'unknown "improper expression")))))
 
 ; M_boolean_logic: implemented for ({&&, ||} ...) calls; (M_value_boolean '(<bool_op> <condition> <condition>) state) -> bvalue
 
