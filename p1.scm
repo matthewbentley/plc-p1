@@ -30,6 +30,12 @@
 
 ; M_state_if: implemented for (if ...); (M_state_if '(if <condition> <expression>) state) | (M_state_if '(<condition> <expression> <expression>) state) -> state
 
+(define M_state_if
+  (lambda (if s)
+    (if (M_value (get_operand1 if) s)
+        (M_value (get_operand2 if) s)
+        (M_value (get_operand3 if) s))))
+
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
 
 ; M_state_expression: dispatches M_state to the proper M_state_(expression)
@@ -102,7 +108,7 @@
 (define get_op car)
 (define get_operand1 cadr)
 (define get_operand2 caddr)
-
+(define get_operand3 cadddr)
 ; STATE STUFF
 (define get_empty_state
   (lambda ()
