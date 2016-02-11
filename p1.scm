@@ -44,15 +44,17 @@
 
 (define error_and
   (lambda (e1 e2)
-    ((and (bool? e1) (bool? e2)) (and e1 e2))
-    (else (error 'type "Operand 1 and 2 for and were not booleans"))))
+    (if (and (bool? e1) (bool? e2))
+        (and e1 e2)
+        (error 'type "Operand 1 and 2 for and were not booleans"))))
 
 ; error_or: basic error catching or function in case of nonbooleans
 
 (define error_or
   (lambda (e1 e2)
-    ((and (bool? e1) (bool? e2)) (or e1 e2))
-    (else (error 'type "Operand 1 and 2 for or were not booleans"))))
+    (if (and (bool? e1) (bool? e2))
+        (or e1 e2)
+        (error 'type "Operand 1 and 2 for or were not booleans"))))
 
 ; M_boolean_logic: implemented for ({&&, ||} ...) calls; (M_value_boolean '(<bool_op> <condition> <condition>) state) -> bvalue
 
