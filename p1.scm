@@ -1,5 +1,17 @@
 ; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <epxression>) state) -> state
 
+(define M_state_var
+  (lambda (declare s)
+      (add_to_state s (var_name declare) (M_value (declare_experssion declare)))))
+
+; declare_experssion: returns the expression of a declare if one exists from the format '(var name <experssion>)
+;    helper for M_state_var
+(define declare_experssion caddr)
+       
+; var_name: returns the name of a var from a declare statement        
+;    helper for M_state_var        
+(define var_name cadr)
+
 ; M_state_assign: implemented for (= ...) calls; (M_state_assign '(= name <expression>) state) -> state
 
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
