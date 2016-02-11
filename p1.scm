@@ -11,16 +11,6 @@
     (M_value (get_operand2 declare) s)))
 
 ; M_state_assign: implemented for (= ...) calls; (M_state_assign '(= name <expression>) state) -> state
-
-; declare_experssion: returns the expression of a declare if one exists from the format '(var name <experssion>)
-;    helper for M_var
-(define declare_experssion caddr)
-       
-; var_name: returns the name of a var from a declare statement        
-;    helper for M_var        
-(define var_name cadr)
-
-; M_state_assign: implemented for (= ...) calls; (M_state_assign '(= name <expression>) state) -> state
 (define M_state_assign
   (lambda (assign s)
       (replace_in_state (M_state (get_operand2 assign) s) (get_operand1 assign) (M_value (get_operand2 assign) s))))
@@ -30,7 +20,7 @@
 ; M_value_math: implemented for ({+,-,*,/,%} ...) calls; (M_value_math '(<math_op> <numeric> <numeric>) state) -> nvalue
 (define M_value_math
   (lambda (expression s)
-      ((get_math_op expression) (M_value (get_operand1) s) (M_value (get_operand2) s))))
+      ((get_math_op expression) (M_value (get_operand1 expression) s) (M_value (get_operand2 expression) s))))
 
 ; helper for M_value_math
 (define get_math_op
