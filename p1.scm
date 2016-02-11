@@ -16,6 +16,9 @@
       (replace_in_state (M_state (get_operand2 assign) s) (get_operand1 assign) (M_value (get_operand2 assign) s))))
     
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
+(define M_value_assign
+  (lambda (assign s)
+    (M_value (get_operand2 expression) s)))
 
 ; M_value_math: implemented for ({+,-,*,/,%} ...) calls; (M_value_math '(<math_op> <numeric> <numeric>) state) -> nvalue
 (define M_value_math
@@ -57,7 +60,7 @@
 (define M_state_while
   (lambda (expression s)
     (if (M_value (get_operand1 expression) s)
-        (M_state expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s)))
+        (M_state_while expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s)))
         ((M_state (get_operand1) s)))))
 
 ; M_state:
