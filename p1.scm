@@ -30,6 +30,20 @@
 ; M_boolean_assign: implemented for (= ...) calls; (M_boolean_assign '(= name <expression>) state) -> bvalue (or error if expression is <numeric>)
 
 ; M_value_math: implemented for ({+,-,*,/,%} ...) calls; (M_value_math '(<math_op> <numeric> <numeric>) state) -> nvalue
+(define M_value_math
+  (lambda (expression s)
+      ((get_math_op expression) (M_value (get_operand1) s) (M_value (get_operand2) s))))
+
+; helper for M_value_math
+(define get_math_op
+  (lambda (o)
+    (cond
+      ((eq? '+ o) +)
+      ((eq? '- o) -)
+      ((eq? '* o) *)
+      ((eq? '/ o) quotient)
+      ((eq? '% o) remainder)
+      (else o))))
 
 ; M_boolean_logic: implemented for ({&&, ||} ...) calls; (M_value_boolean '(<bool_op> <condition> <condition>) state) -> bvalue
 
