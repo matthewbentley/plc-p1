@@ -33,8 +33,10 @@
 (define M_state_if
   (lambda (if s)
     (if (M_value (get_operand1 if) s)
-        (M_value (get_operand2 if) s)
-        (M_value (get_operand3 if) s))))
+        (M_state_expression (get_operand2 if)
+                            (M_state_expression (get_operand1 if) s))
+        (M_state_expression (get_operand3 if)
+                            (M_state_expression (get_operand1 if) s)))))
 
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
 
