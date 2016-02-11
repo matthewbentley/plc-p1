@@ -23,8 +23,7 @@
 ; M_state_assign: implemented for (= ...) calls; (M_state_assign '(= name <expression>) state) -> state
 (define M_state_assign
   (lambda (assign s)
-    (cond
-      (add_to_state (remove_from_state (s (get_operand1 assign))) (get_operand1 assign) (M_value_expression s (get_operand2 assign))))))
+      (replace_in_state (M_state (get_operand2 assign) s) (get_operand1 assign) (M_value (get_operand2 assign) s))))
     
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
 
