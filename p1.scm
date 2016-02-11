@@ -1,6 +1,6 @@
 (load "simpleParser.scm")
 
-(define run
+(define interpret
   (lambda (name)
     (evaluate (parser name) (get_empty_state))))
 
