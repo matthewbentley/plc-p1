@@ -28,13 +28,21 @@
 
 ; M_state_if: implemented for (if ...); (M_state_if '(if <condition> <expression>) state) | (M_state_if '(<condition> <expression> <expression>) state) -> state
 
+(define M_state_if
+  (lambda (if s)
+    (if (M_value (get_operand1 if) s)
+        (M_state (get_operand2 if)
+                            (M_state (get_operand1 if) s))
+        (M_state (get_operand3 if)
+                            (M_state (get_operand1 if) s)))))
+
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
 
-; M_state_expression: dispatches M_state to the proper M_state_(expression)
+; M_state:
 
-; M_value_expression: dispatches M_value to the proper M_value_(expresion) (error if value is not defined for that expression)
+; M_value
 
-; M_boolean_expressin: dispatches M_boolean to the proper M_boolean_(expression) (error if boolean is not defined for that expression)
+; M_boolean
 
 ; The state: '((var1, var2, ...) (value1, value2, ...))
 
@@ -90,7 +98,7 @@
 (define get_op car)
 (define get_operand1 cadr)
 (define get_operand2 caddr)
-
+(define get_operand3 cadddr)
 ; STATE STUFF
 (define get_empty_state
   (lambda ()
