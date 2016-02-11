@@ -2,21 +2,13 @@
 
 (define M_state_var
   (lambda (declare s)
-      (add_to_state s (var_name declare) (M_value (declare_experssion declare) s))))
+      (add_to_state s (get_operand1 declare) (M_value (get_operand2 declare) s))))
 
 ; M_value_var: implemented for (var ...) calls; (M_value_var '(var name)) | (M_value_var '(var name <epxression>)) -> value
 
 (define M_value_var
   (lambda (declare s)
-    (M_value (declare_expression declare) s)))
-
-; declare_experssion: returns the expression of a declare if one exists from the format '(var name <experssion>)
-;    helper for M_var
-(define declare_experssion caddr)
-       
-; var_name: returns the name of a var from a declare statement        
-;    helper for M_var        
-(define var_name cadr)
+    (M_value (get_operand2 declare) s)))
 
 ; M_state_assign: implemented for (= ...) calls; (M_state_assign '(= name <expression>) state) -> state
 
@@ -32,6 +24,10 @@
 
 ; M_value_return: implemented for (return ...); note: return does not need an M_state, as the state doesn't matter after return; (M_value_return '(return <expression>) state) -> value
 
+(define M_value_return
+  (lambda (expression s)
+    (M_value (get_operand1 expression) s)))
+
 ; M_state_if: implemented for (if ...); (M_state_if '(if <condition> <expression>) state) | (M_state_if '(<condition> <expression> <expression>) state) -> state
 
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
@@ -43,11 +39,6 @@
 ; M_boolean_expressin: dispatches M_boolean to the proper M_boolean_(expression) (error if boolean is not defined for that expression)
 
 ; The state: '((var1, var2, ...) (value1, value2, ...))
-
-; M_value_return
-(define M_value_return
-  (lambda (expression s)
-    (M_value (get_operand1 expression) s)))
 
 (define value_dispatch
   (lambda (keyword)
