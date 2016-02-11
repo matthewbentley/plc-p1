@@ -1,5 +1,16 @@
 (load "simpleParser.scm")
 
+(define run
+  (lambda (name)
+    (evaluate (parser name) (get_empty_state))))
+
+(define evaluate
+  (lambda (program state)
+    (cond
+      ((null? state) '())
+      ((eq? (car state) 'return) (display_val (M_value (car state) state)))
+      (else (evaluate (cdr program) (M_state (car program) state))))))
+
 ; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <epxression>) state) -> state
 
 (define M_state_var
@@ -21,7 +32,7 @@
 (define M_state_assign
   (lambda (assign s)
     (if (not (in_state? (get_operand1 assign) s))
-        (error 'var "Variable not declared")
+        (error 'var "Undeclared var")
         (replace_in_state (M_state (get_operand2 assign) s) (get_operand1 assign) (M_value (get_operand2 assign) s)))))
 
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
@@ -32,7 +43,10 @@
 ; M_value_exp: 
 (define M_value_exp
   (lambda (expression s)
-      ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) s) (M_value (get_operand2 expression) (M_state (get_operand1 expression) s)))))
+      (cond
+        ((and (eq? (get_op expression) '-) (null? (cddr expression))) (* -1 (M_value (get_operand1 expression) s)))
+        ((eq? (get_op expression) '!) (M_value (get_operand1 expression) s))
+        (else ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) s) (M_value (get_operand2 expression) (M_state (get_operand1 expression) s)))))))
 
 ; get_exp_op: returns the functions for any experssion
 (define get_exp_op
@@ -51,6 +65,7 @@
       ((eq? '!= o) not_equal)
       ((eq? '&& o) error_and)
       ((eq? '|| o) error_or)
+      ((eq? '! o) error_not)
       (else o))))
 
 (define not_equal
@@ -60,7 +75,9 @@
 ; M_state_exp: the expression itself doesn't change the state, but the values operated on might
 (define M_state_exp
   (lambda (expression s)
-    (M_state (get_operand2 expression) (M_state (get_operand1 expression) s))))
+    (if (or (and (eq? (get_op expression) '-) (null? (cddr expression))) (eq? (get_op expression) '!))
+        (M_state (get_operand1 expression) s)
+        (M_state (get_operand2 expression) (M_state (get_operand1 expression) s)))))
 
 ; error_and: basic error catching and function in case of nonbooleans
 
@@ -78,6 +95,13 @@
         (or e1 e2)
         (error 'type "Operand 1 and 2 for or were not booleans"))))
 
+; error_not: basic error catching not function in case of nonbooleans
+(define error_not
+  (lambda (e)
+    (if (bool? e)
+        (not e)
+        (error 'type "Not must take a bool"))))
+
 ; M_value_return: implemented for (return ...); note: return does not need an M_state, as the state doesn't matter after return; (M_value_return '(return <expression>) state) -> value
 
 (define M_value_return
@@ -88,11 +112,14 @@
 
 (define M_state_if
   (lambda (expression s)
-    (if (M_value (get_operand1 expression) s)
-        (M_state (get_operand2 expression)
-                            (M_state (get_operand1 expression) s))
-        (M_state (get_operand3 expression)
-                            (M_state (get_operand1 expression) s)))))
+    (cond
+      ((M_value (get_operand1 expression) s)
+       (M_state (get_operand2 expression)
+                (M_state (get_operand1 expression) s)))
+      ((not (null? (cdddr expression)))
+       (M_state (get_operand3 expression)
+                (M_state (get_operand1 expression) s)))
+      (else s))))
 
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
 (define M_state_while
@@ -106,8 +133,11 @@
   (lambda (expression s)
     (cond
       ((null? expression) (error 'null "You cannot get the value of null"))
+      ((eq? (car s) 'return) (cadr s))
       ((number? expression) expression)
       ((bool? expression) expression)
+      ((eq? expression 'true) #t)
+      ((eq? expression 'false) #f)
       ((not (list? expression)) (get_from_state s expression))
       (else ((value_dispatch (get_op expression)) expression s)))))
 
@@ -126,6 +156,17 @@
   (lambda (expression s)
     (M_value (get_operand1 expression) s)))
 
+(define display_val
+  (lambda (a)
+    (cond
+      ((eq? a #t) 'true)
+      ((eq? a #f) 'false)
+      (else a))))
+
+(define return
+  (lambda (expression s)
+    (cons 'return (cons (M_value (get_operand1 expression) s) '()))))
+
 (define value_dispatch
   (lambda (keyword)
     (cond
@@ -136,20 +177,20 @@
       ((eq? keyword 'while) (error 'no_value "While cannot be used as a value"))
       ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)
            (eq? keyword '<) (eq? keyword '>) (eq? keyword '<=) (eq? keyword '>=) (eq? keyword '==) (eq? keyword '!=)
-           (eq? keyword '||) (eq? keyword '&&)) M_value_exp)
-      (else (error 'keyword "Unknown or unimplemented keyword")))))
+           (eq? keyword '||) (eq? keyword '&&) (eq? keyword '!)) M_value_exp)
+      (else (error keyword "Unknown or unimplemented keyword")))))
 
 (define state_dispatch
   (lambda (keyword)
     (cond
       ((eq? keyword 'var) M_state_var)
       ((eq? keyword '=) M_state_assign)
-      ((eq? keyword 'return) M_state_return)
+      ((eq? keyword 'return) return)
       ((eq? keyword 'if) M_state_if)
       ((eq? keyword 'while) M_state_while)
       ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)
            (eq? keyword '<) (eq? keyword '>) (eq? keyword '<=) (eq? keyword '>=) (eq? keyword '==) (eq? keyword '!=)
-           (eq? keyword '||) (eq? keyword '&&)) M_state_exp)
+           (eq? keyword '||) (eq? keyword '&&) (eq? keyword '!)) M_state_exp)
       (else (error 'keyword "Unknown or unimplemented keyword")))))
 
 (define bool?
@@ -212,7 +253,8 @@
 (define get_from_state
   (lambda (state var)
     (cond
-      ((null_state? state) '())
+      ((null_state? state) (error 'var "Undeclared var"))
+      ((and (eq? (get_first_var state) var) (null? (get_first_value state))) (error 'var "Unassigned variable"))
       ((eq? (get_first_var state) var) (get_first_value state))
       (else (get_from_state (remove_first_var state) var)))))
 
