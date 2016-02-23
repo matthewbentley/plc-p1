@@ -1,26 +1,52 @@
+(load "simpleParser.scm")
+
+(define interpret
+  (lambda (name)
+    (evaluate (parser name) (get_empty_state))))
+
+(define evaluate
+  (lambda (program state)
+    (cond
+      ((null? state) '())
+      ((eq? (car state) 'return) (display_val (M_value (car state) state)))
+      (else (evaluate (cdr program) (M_state (car program) state))))))
+
 ; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <epxression>) state) -> state
 
 (define M_state_var
   (lambda (declare s)
-      (add_to_state s (get_operand1 declare) (M_value (get_operand2 declare) s))))
+    (cond
+      ((null? (cddr declare)) (add_to_state s (get_operand1 declare) '()))
+      ((in_state? (get_operand1 declare) s) (error 'declare "Cannot declare a var twice"))
+      (else (add_to_state (M_state (get_operand2 declare) s) (get_operand1 declare) (M_value (get_operand2 declare) s))))))
 
 ; M_value_var: implemented for (var ...) calls; (M_value_var '(var name)) | (M_value_var '(var name <epxression>)) -> value
 
 (define M_value_var
   (lambda (declare s)
-    (M_value (get_operand2 declare) s)))
+    (if (null? (cddr declare))
+        '()
+        (M_value (get_operand2 declare) s))))
 
 ; M_state_assign: implemented for (= ...) calls; (M_state_assign '(= name <expression>) state) -> state
 (define M_state_assign
   (lambda (assign s)
-      (replace_in_state (M_state (get_operand2 assign) s) (get_operand1 assign) (M_value (get_operand2 assign) s))))
-    
-; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
+    (if (not (in_state? (get_operand1 assign) s))
+        (error 'var "Undeclared var")
+        (replace_in_state (M_state (get_operand2 assign) s) (get_operand1 assign) (M_value (get_operand2 assign) s)))))
 
-; M_value_math: implemented for ({+,-,*,/,%} ...) calls; (M_value_math '(<math_op> <numeric> <numeric>) state) -> nvalue
-(define M_value_math
+; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
+(define M_value_assign
+  (lambda (assign s)
+    (M_value (get_operand2 assign) s)))
+
+; M_value_exp: 
+(define M_value_exp
   (lambda (expression s)
-      ((get_math_op expression) (M_value (get_operand1 expression) s) (M_value (get_operand2 expression) s))))
+      (cond
+        ((and (eq? (get_op expression) '-) (null? (cddr expression))) (* -1 (M_value (get_operand1 expression) s)))
+        ((eq? (get_op expression) '!) (M_value (get_operand1 expression) s))
+        (else ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) s) (M_value (get_operand2 expression) (M_state (get_operand1 expression) s)))))))
 
 ; get_exp_op: returns the functions for any experssion
 (define get_exp_op
@@ -35,10 +61,23 @@
       ((eq? '<= o) <=)
       ((eq? '> o) >)
       ((eq? '>= o) >=)
-      ((eq? '== o) ==)
+      ((eq? '== o) eq?)
+      ((eq? '!= o) not_equal)
       ((eq? '&& o) error_and)
       ((eq? '|| o) error_or)
+      ((eq? '! o) error_not)
       (else o))))
+
+(define not_equal
+  (lambda (a b)
+    (not (eq? a b))))
+
+; M_state_exp: the expression itself doesn't change the state, but the values operated on might
+(define M_state_exp
+  (lambda (expression s)
+    (if (or (and (eq? (get_op expression) '-) (null? (cddr expression))) (eq? (get_op expression) '!))
+        (M_state (get_operand1 expression) s)
+        (M_state (get_operand2 expression) (M_state (get_operand1 expression) s)))))
 
 ; error_and: basic error catching and function in case of nonbooleans
 
@@ -56,9 +95,12 @@
         (or e1 e2)
         (error 'type "Operand 1 and 2 for or were not booleans"))))
 
-; M_boolean_logic: implemented for ({&&, ||} ...) calls; (M_value_boolean '(<bool_op> <condition> <condition>) state) -> bvalue
-
-; M_boolean_comparison: implemented for ({<,>,<=,>=,==,!=} ...) calls; (M_boolean_comparison '(<comp_op> <numeric> <numeric>) state) -> bvalue
+; error_not: basic error catching not function in case of nonbooleans
+(define error_not
+  (lambda (e)
+    (if (bool? e)
+        (not e)
+        (error 'type "Not must take a bool"))))
 
 ; M_value_return: implemented for (return ...); note: return does not need an M_state, as the state doesn't matter after return; (M_value_return '(return <expression>) state) -> value
 
@@ -69,27 +111,61 @@
 ; M_state_if: implemented for (if ...); (M_state_if '(if <condition> <expression>) state) | (M_state_if '(<condition> <expression> <expression>) state) -> state
 
 (define M_state_if
-  (lambda (if s)
-    (if (M_value (get_operand1 if) s)
-        (M_state (get_operand2 if)
-                            (M_state (get_operand1 if) s))
-        (M_state (get_operand3 if)
-                            (M_state (get_operand1 if) s)))))
+  (lambda (expression s)
+    (cond
+      ((M_value (get_operand1 expression) s)
+       (M_state (get_operand2 expression)
+                (M_state (get_operand1 expression) s)))
+      ((not (null? (cdddr expression)))
+       (M_state (get_operand3 expression)
+                (M_state (get_operand1 expression) s)))
+      (else s))))
 
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
+(define M_state_while
+  (lambda (expression s)
+    (if (M_value (get_operand1 expression) s)
+        (M_state_while expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s)))
+        (M_state (get_operand1 expression) s))))
 
 ; M_state:
+(define M_value
+  (lambda (expression s)
+    (cond
+      ((null? expression) (error 'null "You cannot get the value of null"))
+      ((eq? (car s) 'return) (cadr s))
+      ((number? expression) expression)
+      ((bool? expression) expression)
+      ((eq? expression 'true) #t)
+      ((eq? expression 'false) #f)
+      ((not (list? expression)) (get_from_state s expression))
+      (else ((value_dispatch (get_op expression)) expression s)))))
 
 ; M_value
-
-; M_boolean
-
-; The state: '((var1, var2, ...) (value1, value2, ...))
+(define M_state
+  (lambda (expression s)
+    (cond
+      ((null? expression) (error 'null "You cannot evaluate null"))
+      ((number? expression) s) ; No change in state from a number
+      ((bool? expression) s) ; No change in state from a bool
+      ((not (list? expression)) s) ; No change in state from accessing a variable
+      (else ((state_dispatch (get_op expression)) expression s)))))
 
 ; M_value_return
 (define M_value_return
   (lambda (expression s)
     (M_value (get_operand1 expression) s)))
+
+(define display_val
+  (lambda (a)
+    (cond
+      ((eq? a #t) 'true)
+      ((eq? a #f) 'false)
+      (else a))))
+
+(define return
+  (lambda (expression s)
+    (cons 'return (cons (M_value (get_operand1 expression) s) '()))))
 
 (define value_dispatch
   (lambda (keyword)
@@ -101,33 +177,21 @@
       ((eq? keyword 'while) (error 'no_value "While cannot be used as a value"))
       ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)
            (eq? keyword '<) (eq? keyword '>) (eq? keyword '<=) (eq? keyword '>=) (eq? keyword '==) (eq? keyword '!=)
-           (eq? keyword '||) (eq? keyword '&&)) M_value_exp)
-      (else (error 'keyword "Unknown or unimplemented keyword")))))
-
-(define M_value
-  (lambda (expression s)
-    (cond
-      ((null? expression) (error 'null "You cannot get the value of null"))
-      ((number? expression) expression)
-      (else ((value_dispatch (get_op expression)) expression s)))))
+           (eq? keyword '||) (eq? keyword '&&) (eq? keyword '!)) M_value_exp)
+      (else (error keyword "Unknown or unimplemented keyword")))))
 
 (define state_dispatch
   (lambda (keyword)
     (cond
       ((eq? keyword 'var) M_state_var)
       ((eq? keyword '=) M_state_assign)
-      ((eq? keyword 'return) M_state_return)
+      ((eq? keyword 'return) return)
       ((eq? keyword 'if) M_state_if)
       ((eq? keyword 'while) M_state_while)
-      ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)) M_state_math)
+      ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)
+           (eq? keyword '<) (eq? keyword '>) (eq? keyword '<=) (eq? keyword '>=) (eq? keyword '==) (eq? keyword '!=)
+           (eq? keyword '||) (eq? keyword '&&) (eq? keyword '!)) M_state_exp)
       (else (error 'keyword "Unknown or unimplemented keyword")))))
-
-(define M_state
-  (lambda (expression s)
-    (cond
-      ((null? expression) (error 'null "You cannot evaluate null"))
-      ((number? expresion) s) ; No change in state from a number
-      (else ((state_dispatch (get_op expression)) expression s)))))
 
 (define bool?
   (lambda (b)
@@ -137,7 +201,10 @@
 (define get_operand1 cadr)
 (define get_operand2 caddr)
 (define get_operand3 cadddr)
+
+
 ; STATE STUFF
+; The state: '((var1, var2, ...) (value1, value2, ...))
 (define get_empty_state
   (lambda ()
     '(() ())))
@@ -182,10 +249,19 @@
   (lambda (state var value)
     (add_to_state (remove_from_state state var) var value)))
 
-; (get_from_state var) -> value; gets the value of var from the state
+; (get_from_state state var) -> value; gets the value of var from the state
 (define get_from_state
   (lambda (state var)
     (cond
-      ((null_state? state) '())
+      ((null_state? state) (error 'var "Undeclared var"))
+      ((and (eq? (get_first_var state) var) (null? (get_first_value state))) (error 'var "Unassigned variable"))
       ((eq? (get_first_var state) var) (get_first_value state))
       (else (get_from_state (remove_first_var state) var)))))
+
+; (in_state? var s) -> bool; checks if var is a declared variable in s
+(define in_state?
+  (lambda (var s)
+    (cond
+      ((null_state? s) #f)
+      ((eq? (get_first_var s) var) #t)
+      (else (in_state? var (remove_first_var s))))))
