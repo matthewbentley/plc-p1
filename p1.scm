@@ -283,5 +283,3 @@
       ((null_state? s) #f)
       ((eq? (get_first_var s) var) #t)
       (else (in_state? var (remove_first_var s))))))
-
-(interpret "tests/bracetest.txt")
