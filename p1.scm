@@ -1,3 +1,8 @@
+; Group Memebers
+; - Matthew Bentley
+; - David Lance
+; - Alex Tryjankowski
+
 (load "simpleParser.scm")
 
 (define interpret
@@ -8,11 +13,69 @@
   (lambda (program state)
     (cond
       ((null? state) '())
-      ((eq? (car state) 'return) (display_val (M_value (car state) state)))
-      (else (evaluate (cdr program) (M_state (car program) state))))))
+      ((eq? (get_return_check state) 'return) (display_val (M_value (get_return_check state) state)))
+      (else (evaluate (rest_lines program) (M_state (first_line program) state))))))
+
+; get_return_check: gets the beginning of the state, which is used to check if the state is in return format
+(define get_return_check car)
+; first_line: gets the first line of the program from the parsed out list
+(define first_line car)
+; rest_line: gets the lines after the first of the program from the parsed out list
+(define rest_lines cdr)
+
+; M_state:
+(define M_state
+  (lambda (expression s)
+    (cond
+      ((null? expression) (error 'null "You cannot evaluate null"))
+      ((number? expression) s) ; No change in state from a number
+      ((bool? expression) s) ; No change in state from a bool
+      ((not (list? expression)) s) ; No change in state from accessing a variable
+      (else ((state_dispatch (get_op expression)) expression s)))))
+
+; state_dispatch: returns the proper state function given the keyword from M_state
+(define state_dispatch
+  (lambda (keyword)
+    (cond
+      ((eq? keyword 'var) M_state_var)
+      ((eq? keyword '=) M_state_assign)
+      ((eq? keyword 'return) return)
+      ((eq? keyword 'if) M_state_if)
+      ((eq? keyword 'while) M_state_while)
+      ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)
+           (eq? keyword '<) (eq? keyword '>) (eq? keyword '<=) (eq? keyword '>=) (eq? keyword '==) (eq? keyword '!=)
+           (eq? keyword '||) (eq? keyword '&&) (eq? keyword '!)) M_state_exp)
+      (else (error 'keyword "Unknown or unimplemented keyword")))))
+
+; M_value:
+(define M_value
+  (lambda (expression s)
+    (cond
+      ((null? expression) (error 'null "You cannot get the value of null"))
+      ((eq? (car s) 'return) (cadr s))
+      ((number? expression) expression)
+      ((bool? expression) expression)
+      ((eq? expression 'true) #t)
+      ((eq? expression 'false) #f)
+      ((not (list? expression)) (get_from_state s expression))
+      (else ((value_dispatch (get_op expression)) expression s)))))
+
+; value_dispatch: returns the proper value function given the keyword from M_value
+(define value_dispatch
+  (lambda (keyword)
+    (cond
+      ((eq? keyword 'var) M_value_var)
+      ((eq? keyword '=) M_value_assign)
+      ((eq? keyword 'return) M_value_return)
+      ((eq? keyword 'if) (error 'no_value "If cannot be used as a value"))
+      ((eq? keyword 'while) (error 'no_value "While cannot be used as a value"))
+      ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)
+           (eq? keyword '<) (eq? keyword '>) (eq? keyword '<=) (eq? keyword '>=) (eq? keyword '==) (eq? keyword '!=)
+           (eq? keyword '||) (eq? keyword '&&) (eq? keyword '!)) M_value_exp)
+      (else (error keyword "Unknown or unimplemented keyword")))))
+
 
 ; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <epxression>) state) -> state
-
 (define M_state_var
   (lambda (declare s)
     (cond
@@ -21,7 +84,6 @@
       (else (add_to_state (M_state (get_operand2 declare) s) (get_operand1 declare) (M_value (get_operand2 declare) s))))))
 
 ; M_value_var: implemented for (var ...) calls; (M_value_var '(var name)) | (M_value_var '(var name <epxression>)) -> value
-
 (define M_value_var
   (lambda (declare s)
     (if (null? (cddr declare))
@@ -128,29 +190,6 @@
         (M_state_while expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s)))
         (M_state (get_operand1 expression) s))))
 
-; M_state:
-(define M_value
-  (lambda (expression s)
-    (cond
-      ((null? expression) (error 'null "You cannot get the value of null"))
-      ((eq? (car s) 'return) (cadr s))
-      ((number? expression) expression)
-      ((bool? expression) expression)
-      ((eq? expression 'true) #t)
-      ((eq? expression 'false) #f)
-      ((not (list? expression)) (get_from_state s expression))
-      (else ((value_dispatch (get_op expression)) expression s)))))
-
-; M_value
-(define M_state
-  (lambda (expression s)
-    (cond
-      ((null? expression) (error 'null "You cannot evaluate null"))
-      ((number? expression) s) ; No change in state from a number
-      ((bool? expression) s) ; No change in state from a bool
-      ((not (list? expression)) s) ; No change in state from accessing a variable
-      (else ((state_dispatch (get_op expression)) expression s)))))
-
 ; M_value_return
 (define M_value_return
   (lambda (expression s)
@@ -167,32 +206,6 @@
   (lambda (expression s)
     (cons 'return (cons (M_value (get_operand1 expression) s) '()))))
 
-(define value_dispatch
-  (lambda (keyword)
-    (cond
-      ((eq? keyword 'var) M_value_var)
-      ((eq? keyword '=) M_value_assign)
-      ((eq? keyword 'return) M_value_return)
-      ((eq? keyword 'if) (error 'no_value "If cannot be used as a value"))
-      ((eq? keyword 'while) (error 'no_value "While cannot be used as a value"))
-      ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)
-           (eq? keyword '<) (eq? keyword '>) (eq? keyword '<=) (eq? keyword '>=) (eq? keyword '==) (eq? keyword '!=)
-           (eq? keyword '||) (eq? keyword '&&) (eq? keyword '!)) M_value_exp)
-      (else (error keyword "Unknown or unimplemented keyword")))))
-
-(define state_dispatch
-  (lambda (keyword)
-    (cond
-      ((eq? keyword 'var) M_state_var)
-      ((eq? keyword '=) M_state_assign)
-      ((eq? keyword 'return) return)
-      ((eq? keyword 'if) M_state_if)
-      ((eq? keyword 'while) M_state_while)
-      ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)
-           (eq? keyword '<) (eq? keyword '>) (eq? keyword '<=) (eq? keyword '>=) (eq? keyword '==) (eq? keyword '!=)
-           (eq? keyword '||) (eq? keyword '&&) (eq? keyword '!)) M_state_exp)
-      (else (error 'keyword "Unknown or unimplemented keyword")))))
-
 (define bool?
   (lambda (b)
     (or (eq? b #t) (eq? b #f))))
@@ -203,7 +216,7 @@
 (define get_operand3 cadddr)
 
 
-; STATE STUFF
+; -------- STATE STUFF --------
 ; The state: '((var1, var2, ...) (value1, value2, ...))
 (define get_empty_state
   (lambda ()
