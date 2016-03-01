@@ -37,6 +37,7 @@
 (define state_dispatch
   (lambda (keyword)
     (cond
+      ((eq? keyword 'begin) M_state_brace)
       ((eq? keyword 'var) M_state_var)
       ((eq? keyword '=) M_state_assign)
       ((eq? keyword 'return) return)
@@ -74,6 +75,10 @@
            (eq? keyword '||) (eq? keyword '&&) (eq? keyword '!)) M_value_exp)
       (else (error keyword "Unknown or unimplemented keyword")))))
 
+; M_state_brace: implemented for (begin ...) calls; (M_state_brace '(begin <expression>) state) -> state
+(define M_state_brace
+  (lambda (expression s)
+    (evaluate (cdr expression) s)))
 
 ; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <epxression>) state) -> state
 (define M_state_var
@@ -278,3 +283,5 @@
       ((null_state? s) #f)
       ((eq? (get_first_var s) var) #t)
       (else (in_state? var (remove_first_var s))))))
+
+(interpret "tests/bracetest.txt")
