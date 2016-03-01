@@ -221,57 +221,128 @@
 (define get_operand3 cadddr)
 
 
-; -------- STATE STUFF --------
-; The state: '((var1, var2, ...) (value1, value2, ...))
+; ------------------------ STATE STUFF ------------------------
+; - A scope is the current set of {} that the program is in.  -
+; - A state is a the cons of all scopes going from narrowest  -
+; -   to widest with each car.                                -
+; -------------------------------------------------------------
+
+; The state: '(((var3, var4, ...) (value3, value5, ...))
+;              ((var1, var2, ...) (value1, value2, ...))...)'
 (define get_empty_state
+  (lambda ()
+    (cons (get_empty_scope) '())))
+
+; The scope: '((var1, var2, ...) (value1, value2, ...))'
+(define get_empty_scope
   (lambda ()
     '(() ())))
 
-(define get_first_var caar)
-(define get_first_value caadr)
-(define get_vars car)
-(define get_values cadr)
+; remove_narrow_scope: gets all scopes minus most narrow
+(define remove_narrow_scope cdr)
+(define get_current_scope car)
+(define get_first_var caaar)
+(define get_first_value caadar)
+(define get_vars caar)
+(define get_values cadar)
+(define rest_vars cdr)
+(define rest_values cdr)
+(define get_scope_vars car)
+(define get_scope_vals cadr)
 
-; makes a state from a vars list and a values list
-(define construct_state
+(define eq_scope?
+  (lambda (scope1 scope2)
+    (and (eq_list? (get_scope_vars scope1) (get_scope_vars scope2))
+         (eq_list? (get_scope_vals scope1) (get_scope_vals scope2)))))
+
+(define eq_list?
+  (lambda (ls1 ls2)
+    (cond
+      ((and (null? ls1) (null? ls2)) #t)
+      ((null? ls1) #f)
+      ((null? ls2) #f)
+      ((eq? (car ls1) (car ls2)) (eq_list? (cdr ls1) (cdr ls2)))
+      (else #f))))
+
+; construct_scope: makes a scope from a vars list and a values list
+(define construct_scope
   (lambda (vars values)
     (cons vars (cons values '()))))
 
-; checks if the vars or the values are null
+; construct_state: makes a state from a new scope and the state with the wider scopes
+(define construct_state
+  (lambda (scope state)
+    (cons scope state)))
+
+; null_current_scope?: checks if the vars or the values are null of current scope
+(define null_current_scope?
+  (lambda (state)
+    (cond
+      ((null? state) #t)
+      (else (or (null? (get_vars state)) (null? (get_values state)))))))
+
+; null_state?: checks if all the scopes are null
 (define null_state?
   (lambda (state)
-    (or (null? (get_vars state)) (null? (get_values state)))))
+    (cond
+      ((null? state) #t)
+      (else (and (null_current_scope? state) (null_state? (remove_narrow_scope state)))))))
 
-; essentially "cdrstate"
+; remove_first_var: essentially "cdrscope"
 (define remove_first_var
   (lambda (state)
-    (if (null_state? state)
-        (get_empty_state)
-        (construct_state (cdr (get_vars state)) (cdr (get_values state))))))
+    (if (null_current_scope? state)
+        (construct_state (get_empty_scope) (remove_narrow_scope state))
+        (construct_state
+         (construct_scope (rest_vars (get_vars state)) (rest_values (get_values state)))
+         (remove_narrow_scope state)))))
 
-; (add_to_state state var value) -> state; adds a var with value to the state
+; add_to_state: adds a var with value to the narrowest scope in the state
 (define add_to_state
   (lambda (state var value)
-    (construct_state (cons var (get_vars state)) (cons value (get_values state)))))
+    (construct_state (construct_scope (cons var (get_vars state)) (cons value (get_values state)))
+                     (remove_narrow_scope state))))
 
-; (remove_from_state state var) -> state; removes a var from the state, does nothing if var is not in the state
+; remove_from_state: removes a var from the state starting with the narrrowest scope, does nothing if var is not in the state
 (define remove_from_state
   (lambda (state var)
     (cond
-      ((null_state? state) '(() ()))
-      ((eq? (get_first_var state) var) (construct_state (cdr (get_vars state)) (cdr (get_values state))))
-      (else (add_to_state (remove_from_state (remove_first_var state) var) (get_first_var state) (get_first_value state))))))
+      ((null? state) '())
+      ((null_state? state) (get_empty_state))
+      ((eq_scope? (get_current_scope state)
+                  (get_current_scope (remove_from_scope state var))) (construct_state (get_current_scope state)
+                                                                           (remove_from_state (remove_narrow_scope state) var)))
+      (else (remove_from_scope state var)))))
+
+; remove_from_scope: removes a var from a given scope if found
+(define remove_from_scope
+  (lambda (state var)
+    (cond
+      ((null_current_scope? state) (construct_state (get_empty_scope) (remove_narrow_scope state)))
+      ((eq? (get_first_var state) var) (construct_state (construct_scope (rest_vars (get_vars state))
+                                                                         (rest_values (get_values state)))
+                                                        (remove_narrow_scope state)))
+      (else (add_to_state (remove_from_scope (remove_first_var state) var)
+                          (get_first_var state) (get_first_value state))))))
+      
 
 ; (replace_in_state state var value) -> state; replaces var with value in state
 (define replace_in_state
   (lambda (state var value)
-    (add_to_state (remove_from_state state var) var value)))
+    (cond
+      ((null? state) '())
+      ((null_state? state) (get_empty_state))
+      ((eq_scope? (get_current_scope state)
+                  (get_current_scope (remove_from_scope state var))) (construct_state (get_current_scope state)
+                                                                           (replace_in_state (remove_narrow_scope state) var value)))
+      (else (add_to_state (remove_from_scope state var) var value)))))
 
 ; (get_from_state state var) -> value; gets the value of var from the state
 (define get_from_state
   (lambda (state var)
     (cond
       ((null_state? state) (error 'var "Undeclared var"))
+      ((null_current_scope? state) (get_from_state (remove_narrow_scope state) var))
       ((and (eq? (get_first_var state) var) (null? (get_first_value state))) (error 'var "Unassigned variable"))
       ((eq? (get_first_var state) var) (get_first_value state))
       (else (get_from_state (remove_first_var state) var)))))
@@ -281,5 +352,6 @@
   (lambda (var s)
     (cond
       ((null_state? s) #f)
+      ((null_current_scope? s) (in_state? var (remove_narrow_scope)))
       ((eq? (get_first_var s) var) #t)
       (else (in_state? var (remove_first_var s))))))
