@@ -272,12 +272,16 @@
 ; null_current_scope?: checks if the vars or the values are null of current scope
 (define null_current_scope?
   (lambda (state)
-    (or (null? (get_vars state)) (null? (get_values state)))))
+    (cond
+      ((null? state) #t)
+      (else (or (null? (get_vars state)) (null? (get_values state)))))))
 
 ; null_state?: checks if all the scopes are null
 (define null_state?
   (lambda (state)
-    (and (null_current_scope? state) (null_state? (remove_narrow_scope state)))))
+    (cond
+      ((null? state) #t)
+      (else (and (null_current_scope? state) (null_state? (remove_narrow_scope state)))))))
 
 ; remove_first_var: essentially "cdrscope"
 (define remove_first_var
@@ -298,10 +302,11 @@
 (define remove_from_state
   (lambda (state var)
     (cond
+      ((null? state) '())
       ((null_state? state) (get_empty_state))
-      ((eq? (get_current_scope state)
-            (get_current_scope (remove_from_scope state var))) (cons (get_current_scope state)
-                                                                                (remove_from_state (remove_narrow_scope state) var)))
+      ((eq_scope? (get_current_scope state)
+                  (get_current_scope (remove_from_scope state var))) (construct_state (get_current_scope state)
+                                                                           (remove_from_state (remove_narrow_scope state) var)))
       (else (remove_from_scope state var)))))
 
 ; remove_from_scope: removes a var from a given scope if found
@@ -319,13 +324,20 @@
 ; (replace_in_state state var value) -> state; replaces var with value in state
 (define replace_in_state
   (lambda (state var value)
-    (add_to_state (remove_from_state state var) var value)))
+    (cond
+      ((null? state) '())
+      ((null_state? state) (get_empty_state))
+      ((eq_scope? (get_current_scope state)
+                  (get_current_scope (remove_from_scope state var))) (construct_state (get_current_scope state)
+                                                                           (replace_in_state (remove_narrow_scope state) var value)))
+      (else (add_to_state (remove_from_scope state var) var value)))))
 
 ; (get_from_state state var) -> value; gets the value of var from the state
 (define get_from_state
   (lambda (state var)
     (cond
       ((null_state? state) (error 'var "Undeclared var"))
+      ((null_current_scope? state) (get_from_state (remove_narrow_scope state) var))
       ((and (eq? (get_first_var state) var) (null? (get_first_value state))) (error 'var "Unassigned variable"))
       ((eq? (get_first_var state) var) (get_first_value state))
       (else (get_from_state (remove_first_var state) var)))))
@@ -335,5 +347,6 @@
   (lambda (var s)
     (cond
       ((null_state? s) #f)
+      ((null_current_scope? s) (in_state? var (remove_narrow_scope)))
       ((eq? (get_first_var s) var) #t)
       (else (in_state? var (remove_first_var s))))))
