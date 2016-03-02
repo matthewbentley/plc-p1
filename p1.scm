@@ -115,7 +115,7 @@
   (lambda (expression s)
       (cond
         ((and (eq? (get_op expression) '-) (null? (cddr expression))) (* -1 (M_value (get_operand1 expression) s)))
-        ((eq? (get_op expression) '!) (M_value (get_operand1 expression) s))
+        ((eq? (get_op expression) '!) (error_not (M_value (get_operand1 expression) s)))
         (else ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) s) (M_value (get_operand2 expression) (M_state (get_operand1 expression) s)))))))
 
 ; get_exp_op: returns the functions for any experssion
@@ -194,9 +194,9 @@
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
 (define M_state_while
   (lambda (expression s)
-    (if (M_value (get_operand1 expression) s)
-        (M_state_while expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s)))
-        (M_state (get_operand1 expression) s))))
+          (if (M_value (get_operand1 expression) s)
+              (M_state_while expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s)))
+              (M_state (get_operand1 expression) s))))
 
 (define display_val
   (lambda (a)
