@@ -7,14 +7,15 @@
 
 (define interpret
   (lambda (name)
-    (evaluate (parser name) (get_empty_state))))
+    (evaluate (parser name) (get_empty_state) (lambda (v) v))))
 
 (define evaluate
-  (lambda (program state)
+  (lambda (program state brace)
     (cond
       ((null? state) '())
       ((eq? (get_return_check state) 'return) (display_val (M_value (get_return_check state) state)))
-      (else (evaluate (rest_lines program) (M_state (first_line program) state))))))
+      ((null? program) (brace (cdr state)))
+      (else (evaluate (rest_lines program) (M_state (first_line program) state) brace)))))
 
 ; get_return_check: gets the beginning of the state, which is used to check if the state is in return format
 (define get_return_check car)
@@ -78,7 +79,9 @@
 ; M_state_brace: implemented for (begin ...) calls; (M_state_brace '(begin <expression>) state) -> state
 (define M_state_brace
   (lambda (expression s)
-    (evaluate (cdr expression) (construct_state (get_empty_scope) s)))
+    (call/cc
+     (lambda (brace)
+       (evaluate (cdr expression) (construct_state (get_empty_scope) s) brace)))))
 
 ; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <epxression>) state) -> state
 (define M_state_var
@@ -194,11 +197,6 @@
     (if (M_value (get_operand1 expression) s)
         (M_state_while expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s)))
         (M_state (get_operand1 expression) s))))
-
-; M_value_return
-(define M_value_return
-  (lambda (expression s)
-    (M_value (get_operand1 expression) s)))
 
 (define display_val
   (lambda (a)
@@ -352,6 +350,6 @@
   (lambda (var s)
     (cond
       ((null_state? s) #f)
-      ((null_current_scope? s) (in_state? var (remove_narrow_scope)))
+      ((null_current_scope? s) (in_state? var (remove_narrow_scope  s)))
       ((eq? (get_first_var s) var) #t)
       (else (in_state? var (remove_first_var s))))))
