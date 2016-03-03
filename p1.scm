@@ -7,7 +7,9 @@
 
 (define interpret
   (lambda (name)
-    (evaluate (parser name) (get_empty_state) (lambda (v) v) (lambda (v) v) (lambda (v) v))))
+    (call/cc
+     (lambda (return)
+       (evaluate (parser name) (get_empty_state) (lambda (v) v) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "continue outside of loop")))))))
 
 (define evaluate
   (lambda (program state brace break continue)
@@ -117,7 +119,7 @@
   (lambda (expression s break continue)
       (cond
         ((and (eq? (get_op expression) '-) (null? (cddr expression))) (* -1 (M_value (get_operand1 expression) s)))
-        ((eq? (get_op expression) '!) (error_not (M_value (get_operand1 expression) s)))
+        ((eq? (get_op expression) '!) (error_not (M_value (get_operand1 expression) s break continue)))
         (else ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) s break continue) (M_value (get_operand2 expression) (M_state (get_operand1 expression) s break continue) break continue))))))
 
 ; get_exp_op: returns the functions for any experssion
@@ -178,7 +180,7 @@
 
 (define M_value_return
   (lambda (expression s)
-    (M_value (get_operand1 expression) s)))
+    ((return (M_value (get_operand1 expression) s)))))
 
 ; M_state_if: implemented for (if ...); (M_state_if '(if <condition> <expression>) state) | (M_state_if '(<condition> <expression> <expression>) state) -> state
 
@@ -194,17 +196,23 @@
       (else s))))
 
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
+(define M_state_while_helper
+  (lambda (expression s break continue)
+    ;(call/cc
+     ;(lambda (_break)
+       (if (M_value (get_operand1 expression) s break continue)
+           (M_state_while_helper expression
+                          (call/cc
+                           (lambda (_continue)
+                             (M_state_while_helper expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s break _continue) break _continue) break _continue)))
+                          break continue)
+           (M_state (get_operand1 expression) s break continue))))
+
 (define M_state_while
   (lambda (expression s break continue)
     (call/cc
      (lambda (_break)
-       (letrec ((loop (lambda (expression s break_ continue_)
-       (call/cc
-        (lambda (_continue)
-                           (if (M_value (get_operand1 expression) s break_ _continue)
-                               (M_state_while expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s break_ _continue) break_ _continue) break_ _continue)
-                               (M_state (get_operand1 expression) s break_ _continue)))))))
-            (loop expression s _break continue))))))
+       (M_state_while_helper expression s _break continue)))))
 
 (define M_state_continue
   (lambda (expression s break continue)
