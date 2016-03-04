@@ -7,9 +7,10 @@
 
 (define interpret
   (lambda (name)
-    (call/cc
-     (lambda (return*)
-       (evaluate (parser name) (get_empty_state) (lambda (v) v) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "continue outside of loop")) (lambda (e) "Error thrown") return*)))))
+    (display_val
+     (call/cc
+      (lambda (return*)
+        (evaluate (parser name) (get_empty_state) (lambda (v) v) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "continue outside of loop")) (lambda (s e) (error "Error thrown")) return*))))))
 
 (define evaluate
   (lambda (program state brace break continue throw return*)
@@ -52,6 +53,10 @@
       ((eq? keyword 'return) return)
       ((eq? keyword 'if) M_state_if)
       ((eq? keyword 'while) M_state_while)
+      ((eq? keyword 'try) M_state_try)
+      ((eq? keyword 'catch) M_state_catch)
+      ((eq? keyword 'finally) M_state_finally)
+      ((eq? keyword 'throw) M_state_throw)
       ((member keyword (expressions)) M_state_exp)
       (else (error 'keyword "Unknown or unimplemented keyword")))))
 
@@ -86,6 +91,18 @@
     (call/cc
      (lambda (brace)
        (evaluate (cdr expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
+
+(define M_state_finally
+  (lambda (expression s break continue throw return*)
+    (call/cc
+     (lambda (brace)
+       (evaluate (get_operand1 expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
+
+(define M_state_catch
+  (lambda (expression s break continue throw return*)
+    (call/cc
+     (lambda (brace)
+       (evaluate (get_operand2 expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
 
 ; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <epxression>) state) -> state
 (define M_state_var
@@ -221,21 +238,30 @@
   (lambda (expression s break continue throw return*)
     (break (remove_narrow_scope s))))
 
-;(define get_throw_catched
-;  (lambda (catch old_throw)
-;    (if (null? catch)
-;        old_throw
-;        (cons 'begin catch))))
-;
-;
-;; TODO: If _throw is called, return the value of (finally (catch)), else return (finally (try))
-;(define M_state_try
-;  (lambda (expression s break continue throw return*)
-;    (M_state 
-;     (call/cc
-;      (lambda (_throw)
-;        (M_state (cons 'begin (get_operand1 expression)) s break continue (get_throw_catched (M_state (cons 'begin (get_operand2 expression)) s break continue 
-    
+(define M_state_try_catch_helper
+  (lambda (expression s break continue throw_old throw_cc return*)
+    (if (null? expression)
+        (lambda (s v) (throw_old s v))
+        (lambda (s v)
+          (throw_cc
+           (call/cc
+            (lambda (brace)
+              (evaluate (get_operand2 expression) (construct_state (cons '(e) (cons (cons v '()) '())) s) brace break continue throw_old return*))))))))
+
+(define M_state_try
+  (lambda (expression s break continue throw return*)
+    (M_state (get_operand3 expression)
+     (call/cc
+      (lambda (throw_cc)
+        (M_state (cons 'begin (get_operand1 expression)) s break continue (M_state_try_catch_helper (get_operand2 expression) s break continue throw throw_cc return*) return*)))
+     break continue throw return*)))
+;        (M_state (cons 'begin (cons (get_operand1 expression) '())) s break continue (lambda (_s v) ((get_throw_catched _throw (get_operand2 expression) throw) (M_state (get_operand2 expression) _s break continue throw return*))) return*)))
+;     break continue throw return*)))
+
+(define M_state_throw
+  (lambda (expression s break continue throw return*)
+    (throw s (get_operand1 expression))))
+
 
 (define display_val
   (lambda (a)
