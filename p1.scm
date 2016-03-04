@@ -135,7 +135,7 @@
 (define M_value_exp
   (lambda (expression s break continue throw return*)
       (cond
-        ((and (eq? (get_op expression) '-) (null? (cddr expression))) (* -1 (M_value (get_operand1 expression) s)))
+        ((and (eq? (get_op expression) '-) (null? (cddr expression))) (* -1 (M_value (get_operand1 expression) s break continue throw return*)))
         ((eq? (get_op expression) '!) (error_not (M_value (get_operand1 expression) s break continue throw return*)))
         (else ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) s break continue throw return*) (M_value (get_operand2 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*))))))
 
