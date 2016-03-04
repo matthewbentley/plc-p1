@@ -9,15 +9,15 @@
   (lambda (name)
     (call/cc
      (lambda (return*)
-       (evaluate (parser name) (get_empty_state) (lambda (v) v) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "continue outside of loop")) return*)))))
+       (evaluate (parser name) (get_empty_state) (lambda (v) v) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "continue outside of loop")) (lambda (e) "Error thrown") return*)))))
 
 (define evaluate
-  (lambda (program state brace break continue return*)
+  (lambda (program state brace break continue throw return*)
     (cond
       ((null? state) '())
-      ;((eq? (get_return_check state) 'return) (display_val (M_value (get_return_check state) state break continue return*)))
+      ;((eq? (get_return_check state) 'return) (display_val (M_value (get_return_check state) state break continue throw return*)))
       ((null? program) (brace (cdr state)))
-      (else (evaluate (rest_lines program) (M_state (first_line program) state break continue return*) brace break continue return*)))))
+      (else (evaluate (rest_lines program) (M_state (first_line program) state break continue throw return*) brace break continue throw return*)))))
 
 ; get_return_check: gets the beginning of the state, which is used to check if the state is in return format
 (define get_return_check car)
@@ -28,13 +28,17 @@
 
 ; M_state:
 (define M_state
-  (lambda (expression s break continue return*)
+  (lambda (expression s break continue throw return*)
     (cond
-      ((null? expression) (error 'null "You cannot evaluate null"))
+      ((null? expression) s) ; make '() a nop
       ((number? expression) s) ; No change in state from a number
       ((bool? expression) s) ; No change in state from a bool
       ((not (list? expression)) s) ; No change in state from accessing a variable
-      (else ((state_dispatch (get_op expression)) expression s break continue return*)))))
+      (else ((state_dispatch (get_op expression)) expression s break continue throw return*)))))
+
+(define expressions
+  (lambda ()
+    '(+ - * / % < > <= >= == != || && !)))
 
 ; state_dispatch: returns the proper state function given the keyword from M_state
 (define state_dispatch
@@ -48,14 +52,12 @@
       ((eq? keyword 'return) return)
       ((eq? keyword 'if) M_state_if)
       ((eq? keyword 'while) M_state_while)
-      ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)
-           (eq? keyword '<) (eq? keyword '>) (eq? keyword '<=) (eq? keyword '>=) (eq? keyword '==) (eq? keyword '!=)
-           (eq? keyword '||) (eq? keyword '&&) (eq? keyword '!)) M_state_exp)
+      ((member keyword (expressions)) M_state_exp)
       (else (error 'keyword "Unknown or unimplemented keyword")))))
 
 ; M_value:
 (define M_value
-  (lambda (expression s break continue return*)
+  (lambda (expression s break continue throw return*)
     (cond
       ((null? expression) (error 'null "You cannot get the value of null"))
       ((eq? (car s) 'return) (cadr s))
@@ -64,7 +66,7 @@
       ((eq? expression 'true) #t)
       ((eq? expression 'false) #f)
       ((not (list? expression)) (get_from_state s expression))
-      (else ((value_dispatch (get_op expression)) expression s break continue return*)))))
+      (else ((value_dispatch (get_op expression)) expression s break continue throw return*)))))
 
 ; value_dispatch: returns the proper value function given the keyword from M_value
 (define value_dispatch
@@ -75,25 +77,23 @@
       ((eq? keyword 'return) M_value_return)
       ((eq? keyword 'if) (error 'no_value "If cannot be used as a value"))
       ((eq? keyword 'while) (error 'no_value "While cannot be used as a value"))
-      ((or (eq? keyword '+) (eq? keyword '-) (eq? keyword '*) (eq? keyword '/) (eq? keyword '%)
-           (eq? keyword '<) (eq? keyword '>) (eq? keyword '<=) (eq? keyword '>=) (eq? keyword '==) (eq? keyword '!=)
-           (eq? keyword '||) (eq? keyword '&&) (eq? keyword '!)) M_value_exp)
+      ((member keyword (expressions)) M_value_exp)
       (else (error keyword "Unknown or unimplemented keyword")))))
 
 ; M_state_begin: implemented for (begin ...) calls; (M_state_begin '(begin <expression>) state) -> state
 (define M_state_begin
-  (lambda (expression s break continue return*)
+  (lambda (expression s break continue throw return*)
     (call/cc
      (lambda (brace)
-       (evaluate (cdr expression) (construct_state (get_empty_scope) s) brace break continue return*)))))
+       (evaluate (cdr expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
 
 ; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <epxression>) state) -> state
 (define M_state_var
-  (lambda (declare s break continue return*)
+  (lambda (declare s break continue throw return*)
     (cond
       ((null? (cddr declare)) (add_to_state s (get_operand1 declare) '()))
       ((in_state? (get_operand1 declare) s) (error 'declare "Cannot declare a var twice"))
-      (else (add_to_state (M_state (get_operand2 declare) s break continue return*) (get_operand1 declare) (M_value (get_operand2 declare) s break continue return*))))))
+      (else (add_to_state (M_state (get_operand2 declare) s break continue throw return*) (get_operand1 declare) (M_value (get_operand2 declare) s break continue throw return*))))))
 
 ; M_value_var: implemented for (var ...) calls; (M_value_var '(var name)) | (M_value_var '(var name <epxression>)) -> value
 (define M_value_var
@@ -104,23 +104,23 @@
 
 ; M_state_assign: implemented for (= ...) calls; (M_state_assign '(= name <expression>) state) -> state
 (define M_state_assign
-  (lambda (assign s break continue return*)
+  (lambda (assign s break continue throw return*)
     (if (not (in_state? (get_operand1 assign) s))
         (error 'var "Undeclared var")
-        (replace_in_state (M_state (get_operand2 assign) s break continue return*) (get_operand1 assign) (M_value (get_operand2 assign) s break continue return*)))))
+        (replace_in_state (M_state (get_operand2 assign) s break continue throw return*) (get_operand1 assign) (M_value (get_operand2 assign) s break continue throw return*)))))
 
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
 (define M_value_assign
-  (lambda (assign s)
-    (M_value (get_operand2 assign) s)))
+  (lambda (assign s break continue throw return*)
+    (M_value (get_operand2 assign) s break continue throw return*)))
 
 ; M_value_exp: 
 (define M_value_exp
-  (lambda (expression s break continue return*)
+  (lambda (expression s break continue throw return*)
       (cond
         ((and (eq? (get_op expression) '-) (null? (cddr expression))) (* -1 (M_value (get_operand1 expression) s)))
-        ((eq? (get_op expression) '!) (error_not (M_value (get_operand1 expression) s break continue return*)))
-        (else ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) s break continue return*) (M_value (get_operand2 expression) (M_state (get_operand1 expression) s break continue return*) break continue return*))))))
+        ((eq? (get_op expression) '!) (error_not (M_value (get_operand1 expression) s break continue throw return*)))
+        (else ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) s break continue throw return*) (M_value (get_operand2 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*))))))
 
 ; get_exp_op: returns the functions for any experssion
 (define get_exp_op
@@ -148,10 +148,10 @@
 
 ; M_state_exp: the expression itself doesn't change the state, but the values operated on might
 (define M_state_exp
-  (lambda (expression s break continue return*)
+  (lambda (expression s break continue throw return*)
     (if (or (and (eq? (get_op expression) '-) (null? (cddr expression))) (eq? (get_op expression) '!))
-        (M_state (get_operand1 expression) s break continue return*)
-        (M_state (get_operand2 expression) (M_state (get_operand1 expression) s break continue return*) break continue return*))))
+        (M_state (get_operand1 expression) s break continue throw return*)
+        (M_state (get_operand2 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*))))
 
 ; error_and: basic error catching and function in case of nonbooleans
 
@@ -185,40 +185,57 @@
 ; M_state_if: implemented for (if ...); (M_state_if '(if <condition> <expression>) state) | (M_state_if '(<condition> <expression> <expression>) state) -> state
 
 (define M_state_if
-  (lambda (expression s break continue return*)
+  (lambda (expression s break continue throw return*)
     (cond
-      ((M_value (get_operand1 expression) s break continue return*)
+      ((M_value (get_operand1 expression) s break continue throw return*)
        (M_state (get_operand2 expression)
-                (M_state (get_operand1 expression) s break continue return*) break continue return*))
+                (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*))
       ((not (null? (cdddr expression)))
        (M_state (get_operand3 expression)
-                (M_state (get_operand1 expression) s break continue return*) break continue return*))
+                (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*))
       (else s))))
 
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
+; TODO: stack grows w/ unnessesary call/cc's (TODO: rewrite in cps)
 (define M_state_while_helper
-  (lambda (expression s break continue return*)
-       (if (M_value (get_operand1 expression) s break continue return*)
+  (lambda (expression s break continue throw return*)
+       (if (M_value (get_operand1 expression) s break continue throw return*)
            (M_state_while_helper expression
                           (call/cc
                            (lambda (_continue)
-                             (M_state_while_helper expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s break _continue return*) break _continue return*) break _continue return*)))
-                          break continue return*)
-           (M_state (get_operand1 expression) s break continue return*))))
+                             (M_state_while_helper expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s break _continue throw return*) break _continue throw return*) break _continue throw return*)))
+                          break continue throw return*)
+           (break (M_state (get_operand1 expression) s break continue throw return*)))))
 
 (define M_state_while
-  (lambda (expression s break continue return*)
+  (lambda (expression s break continue throw return*)
     (call/cc
      (lambda (_break)
-       (M_state_while_helper expression s _break continue return*)))))
+       (M_state_while_helper expression s _break continue throw return*)))))
 
 (define M_state_continue
-  (lambda (expression s break continue return*)
+  (lambda (expression s break continue throw return*)
     (continue (remove_narrow_scope s))))
 
 (define M_state_break
-  (lambda (expression s break continue return*)
+  (lambda (expression s break continue throw return*)
     (break (remove_narrow_scope s))))
+
+;(define get_throw_catched
+;  (lambda (catch old_throw)
+;    (if (null? catch)
+;        old_throw
+;        (cons 'begin catch))))
+;
+;
+;; TODO: If _throw is called, return the value of (finally (catch)), else return (finally (try))
+;(define M_state_try
+;  (lambda (expression s break continue throw return*)
+;    (M_state 
+;     (call/cc
+;      (lambda (_throw)
+;        (M_state (cons 'begin (get_operand1 expression)) s break continue (get_throw_catched (M_state (cons 'begin (get_operand2 expression)) s break continue 
+    
 
 (define display_val
   (lambda (a)
@@ -228,8 +245,8 @@
       (else a))))
 
 (define return
-  (lambda (expression s break continue return*)
-    (return* (M_value (get_operand1 expression) s break continue return*))))
+  (lambda (expression s break continue throw return*)
+    (return* (M_value (get_operand1 expression) s break continue throw return*))))
 
 (define bool?
   (lambda (b)
