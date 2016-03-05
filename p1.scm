@@ -260,7 +260,7 @@
 
 (define M_state_throw
   (lambda (expression s break continue throw return*)
-    (throw s (get_operand1 expression))))
+    (throw (remove_narrow_scope s) (get_operand1 expression))))
 
 
 (define display_val
