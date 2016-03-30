@@ -1,4 +1,4 @@
-; Group Memebers
+; Group Members
 ; - Matthew Bentley
 ; - David Lance
 ; - Alex Tryjankowski
@@ -304,6 +304,15 @@
 ; environment: '(state1 state2 state3 ... globalstate)
 ;  where lower numbered states are newer, and globalstate is always available
 
+(define get_empty_environment
+  (lambda ()
+    (cons (get_empty_state) '())))
+
+(define add_state_to_environment
+  (lambda (state environment)
+    (cons state environment)))
+
+(define remove_first_state_from_environment cdr)
 
 (define get_empty_state
   (lambda ()
@@ -341,6 +350,7 @@
 (define get_scope_vals
   (lambda (v)
     (map unbox (cadr v))))
+(define get_scope_boxed_vals cadr)
 
 (define eq_scope?
   (lambda (scope1 scope2)
@@ -426,7 +436,15 @@
       ((eq_scope? (get_current_scope state)
                   (get_current_scope (remove_from_scope state var))) (construct_state (get_current_scope state)
                                                                                       (replace_in_state (remove_narrow_scope state) var value)))
-      (else (add_to_state (remove_from_scope state var) var value)))))
+      (else (begin
+              (replace_in_scope (get_scope_vars (get_current_scope state)) (get_scope_boxed_vals (get_current_scope state)) var value)
+              state)))))
+      ;      (else (add_to_state (remove_from_scope state var) var value)))))
+
+(define replace_in_scope
+  (lambda (vars values var value)
+    (if (eq? (car vars) var) (set-box! (car values) value)                      
+        (replace_in_scope (cdr vars) (cdr values) var value))))
 
 ; (get_from_state state var) -> value; gets the value of var from the state
 (define get_from_state
