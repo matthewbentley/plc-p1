@@ -67,7 +67,7 @@
       ((eq? keyword 'catch) M_state_catch)
       ((eq? keyword 'finally) M_state_finally)
       ((eq? keyword 'throw) M_state_throw)
-;      ((eq? keyword 'funcall) M_value_state)
+      ((eq? keyword 'funcall) M_value_function)
       ((eq? keyword 'funciton) M_state_function)
       ((member keyword (expressions)) M_state_exp)
       (else keyword))))
