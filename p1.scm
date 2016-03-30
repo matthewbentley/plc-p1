@@ -392,7 +392,7 @@
       ((null_state? state) (get_empty_state))
       ((eq_scope? (get_current_scope state)
                   (get_current_scope (remove_from_scope state var))) (construct_state (get_current_scope state)
-                                                                           (remove_from_state (remove_narrow_scope state) var)))
+                                                                                      (remove_from_state (remove_narrow_scope state) var)))
       (else (remove_from_scope state var)))))
 
 ; remove_from_scope: removes a var from a given scope if found
