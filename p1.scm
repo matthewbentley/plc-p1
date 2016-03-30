@@ -17,7 +17,7 @@
   (lambda (program benv brace break continue throw return*)
     (cond
       ((null? benv) '())
-      ((null? program) (box (brace (cdr (car (unbox benv))))))
+      ((null? program) (brace benv))
       (else (evaluate (rest_lines program) (M_state (first_line program) benv break continue throw return*) brace break continue throw return*)))))
 
 ; first_line: gets the first line of the program from the parsed out list
@@ -346,9 +346,14 @@
                 (cons (remove_narrow_scope (car (unbox benv))) (cdr (unbox benv))))
       benv)))
 
+(define remove_narrow_scope_env
+  (lambda (env)
+    (cons (remove_narrow_scope (car env)) (cdr env))))
+
 (define add_narrow_scope
   (lambda (state)
     (cons empty_scope_state state)))
+
 (define add_narrow_scope_benv
   (lambda (benv)
     (begin
@@ -411,6 +416,7 @@
   (lambda (state)
     (cond
       ((null? state) #t)
+      ((null? (car state)) #t)
       (else (or (null? (car (car state))) (null? (cdr (car state))))))))
 
 ; null_state?: checks if all the scopes are null
