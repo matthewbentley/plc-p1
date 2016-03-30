@@ -521,7 +521,7 @@
                 (fun (lambda (env var found)
                        (cond
                          ((null? env) (error 'var "Undeclared var"))
-                         ((null_state? env) (fun (remove_narrow_state env) var found))
+                         ((null_state? (car env)) (fun (remove_narrow_state env) var found))
                          (else (and (get_from_state (car env) var found) (fun (remove_narrow_state env) var found)))))))
          (fun env var found))))))
 
