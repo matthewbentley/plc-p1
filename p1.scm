@@ -87,7 +87,14 @@
   (lambda (expression s break continue throw return*)
     (call/cc
      (lambda (brace)
-       (evaluate (get_body expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
+       (let ((_begin (lambda (b c)
+                       (remove_narrow_scope (evaluate (get_body expression) (add_narrow_scope s) brace b c throw return*))))) 
+         (_begin (lambda (s) (brace (break s))) (lambda (s) (brace (continue s)))))))))
+;(define M_state_begin
+;  (lambda (expression s break continue throw return*)
+;    (call/cc
+;     (lambda (brace)
+;       (evaluate (get_body expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
 
 (define get_body cdr)
 
@@ -135,12 +142,12 @@
 ; M_value_exp: 
 (define M_value_exp
   (lambda (expression s break continue throw return*)
-      (cond
-        ((and (eq? (get_op expression) '-) (null? (cddr expression))) (* -1 (M_value (get_operand1 expression) s break continue throw return*)))
-        ((eq? (get_op expression) '!) (error_not (M_value (get_operand1 expression) s break continue throw return*)))
-        (else ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) s break continue throw return*) (M_value (get_operand2 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*))))))
+    (cond
+      ((and (eq? (get_op expression) '-) (null? (cddr expression))) (* -1 (M_value (get_operand1 expression) s break continue throw return*)))
+      ((eq? (get_op expression) '!) (error_not (M_value (get_operand1 expression) s break continue throw return*)))
+      (else ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) s break continue throw return*) (M_value (get_operand2 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*))))))
 
-; get_exp_op: returns the functions for any experssion
+; get_exp_op: returns the functions for any expression
 (define get_exp_op
   (lambda (o)
     (cond
@@ -211,21 +218,19 @@
 
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
 ; TODO: stack grows w/ unnessesary call/cc's (TODO: rewrite in cps)
-(define M_state_while_helper
-  (lambda (expression s break continue throw return*)
-       (if (M_value (get_operand1 expression) s break continue throw return*)
-           (M_state_while_helper expression
-                          (call/cc
-                           (lambda (_continue)
-                             (M_state_while_helper expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s break _continue throw return*) break _continue throw return*) break _continue throw return*)))
-                          break continue throw return*)
-           (break (M_state (get_operand1 expression) s break continue throw return*)))))
-
 (define M_state_while
   (lambda (expression s break continue throw return*)
     (call/cc
      (lambda (_break)
-       (M_state_while_helper expression s _break continue throw return*)))))
+       (letrec ((loop (lambda (expression s)
+                        (if (M_value (get_operand1 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return)
+                            (loop expression (M_state (get_operand2 expression)
+                                                      (M_state (get_operand1 expression) s _break continue throw return*)
+                                                      (lambda (s) (_break s))
+                                                      (lambda (s) (_break (loop expression s)))
+                                                      throw return*))
+                            (M_state (get_operand1 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*)))))
+         (loop expression s))))))
 
 ; (continue ...) -> jumps to next iteration of innermost loop
 (define M_state_continue
@@ -252,10 +257,10 @@
 (define M_state_try
   (lambda (expression s break continue throw return*)
     (M_state (get_operand3 expression)
-     (call/cc
-      (lambda (throw_cc)
-        (M_state (cons 'begin (get_operand1 expression)) s break continue (M_state_try_catch_helper (get_operand2 expression) s break continue throw throw_cc return*) return*)))
-     break continue throw return*)))
+             (call/cc
+              (lambda (throw_cc)
+                (M_state (cons 'begin (get_operand1 expression)) s break continue (M_state_try_catch_helper (get_operand2 expression) s break continue throw throw_cc return*) return*)))
+             break continue throw return*)))
 
 ; Actually do the throw
 (define M_state_throw
@@ -302,6 +307,8 @@
   (lambda ()
     '(() ())))
 
+(define empty_scope_state '(()()))
+
 ; Almost empty scope: it has one value in it (useful for throws)
 (define scope_with_value
   (lambda (e v)
@@ -309,6 +316,11 @@
 
 ; remove_narrow_scope: gets all scopes minus most narrow
 (define remove_narrow_scope cdr)
+
+(define add_narrow_scope
+  (lambda (state)
+    (cons empty_scope_state state)))
+
 (define get_current_scope car)
 (define get_first_var caaar)
 (define get_first_value caadar)
@@ -380,7 +392,7 @@
       ((null_state? state) (get_empty_state))
       ((eq_scope? (get_current_scope state)
                   (get_current_scope (remove_from_scope state var))) (construct_state (get_current_scope state)
-                                                                           (remove_from_state (remove_narrow_scope state) var)))
+                                                                                      (remove_from_state (remove_narrow_scope state) var)))
       (else (remove_from_scope state var)))))
 
 ; remove_from_scope: removes a var from a given scope if found
@@ -393,7 +405,7 @@
                                                         (remove_narrow_scope state)))
       (else (add_to_state (remove_from_scope (remove_first_var state) var)
                           (get_first_var state) (get_first_value state))))))
-      
+
 
 ; (replace_in_state state var value) -> state; replaces var with value in state
 (define replace_in_state
@@ -403,7 +415,7 @@
       ((null_state? state) (get_empty_state))
       ((eq_scope? (get_current_scope state)
                   (get_current_scope (remove_from_scope state var))) (construct_state (get_current_scope state)
-                                                                           (replace_in_state (remove_narrow_scope state) var value)))
+                                                                                      (replace_in_state (remove_narrow_scope state) var value)))
       (else (add_to_state (remove_from_scope state var) var value)))))
 
 ; (get_from_state state var) -> value; gets the value of var from the state
