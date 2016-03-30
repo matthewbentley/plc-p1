@@ -68,7 +68,7 @@
       ((eq? keyword 'finally) M_state_finally)
       ((eq? keyword 'throw) M_state_throw)
       ((eq? keyword 'funcall) M_value_state)
-      ((eq? keyword 'funciton) M_state_function)
+;      ((eq? keyword 'funciton) M_state_function)
       ((member keyword (expressions)) M_state_exp)
       (else keyword))))
 ;      (else (error 'keyword "Unknown or unimplemented keyword")))))
@@ -97,6 +97,14 @@
       ((eq? keyword 'funcall) M_value_function)
       ((member keyword (expressions)) M_value_exp)
       (else (error keyword "Unknown or unimplemented keyword")))))
+
+; M_state_function: state call for _defining_ a function. This should add a binding from an atom to a closure to the environment
+;  closure: (cons benv (cons parameters (cons code '())))
+
+
+; M_value_funcall: probably similar to M_state_begin, but returns a value at the end
+;  The replacing functions should take side efffects into account (I hope)
+
 
 ; M_state_begin: implemented for (begin ...) calls; (M_state_begin '(begin <expression>) state) -> state
 (define M_state_begin
@@ -234,7 +242,6 @@
       (else benv))))
 
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
-; TODO: stack grows w/ unnessesary call/cc's (TODO: rewrite in cps)
 (define M_state_while
   (lambda (expression benv break continue throw return*)
     (call/cc
@@ -531,19 +538,13 @@
   (lambda (benv var)
     (call/cc
      (lambda (found)
-       (letrec ((env (maybe_unbox benv))
+       (letrec ((env (unbox benv))
                 (fun (lambda (env var found)
                        (cond
                          ((null? env) (error 'var "Undeclared var"))
                          ((null_state? (car env)) (fun (remove_narrow_state env) var found))
                          (else (and (get_from_state (car env) var found) (fun (remove_narrow_state env) var found)))))))
          (fun env var found))))))
-
-(define maybe_unbox
-  (lambda (b)
-    (cond
-      ((box? b) (unbox b))
-      (else b))))
                                                                                         
 ;           ((and (eq? (get_first_var state) var) (null? (get_first_value state))) (error 'var "Unassigned variable"))
  ;          ((eq? (get_first_var state) var) (get_first_value state))
