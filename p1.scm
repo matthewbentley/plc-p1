@@ -67,6 +67,7 @@
       ((eq? keyword 'catch) M_state_catch)
       ((eq? keyword 'finally) M_state_finally)
       ((eq? keyword 'throw) M_state_throw)
+      ((eq? keyword 'funcall) M_value_state)
       ((eq? keyword 'funciton) M_state_function)
       ((member keyword (expressions)) M_state_exp)
       (else keyword))))
@@ -93,6 +94,7 @@
       ((eq? keyword 'return) M_value_return)
       ((eq? keyword 'if) (error 'no_value "If cannot be used as a value"))
       ((eq? keyword 'while) (error 'no_value "While cannot be used as a value"))
+      ((eq? keyword 'funcall) M_value_function)
       ((member keyword (expressions)) M_value_exp)
       (else (error keyword "Unknown or unimplemented keyword")))))
 
