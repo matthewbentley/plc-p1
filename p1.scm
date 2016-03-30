@@ -283,11 +283,11 @@
      (lambda (_break)
        (letrec ((loop (lambda (expression benv)
                         (if (M_value (get_operand1 expression) (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return)
-                            (loop expression (M_state (get_operand2 expression)
+                            (loop expression (remove_narrow_scope_benv (M_state (get_operand2 expression)
                                                       (M_state (get_operand1 expression) benv _break continue throw return*)
                                                       (lambda (benv) (_break benv))
                                                       (lambda (benv) (_break (loop expression benv)))
-                                                      throw return*))
+                                                      throw return*)))
                             (M_state (get_operand1 expression) (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return*)))))
          (loop expression benv))))))
 
