@@ -3,7 +3,7 @@
 ; - David Lance
 ; - Alex Tryjankowski
 
-(load "simpleParser.scm")
+(load "functionParser.scm")
 
 (define interpret
   (lambda (name)
@@ -21,7 +21,7 @@
   (lambda (program benv return*)
     (cond
       ((null? benv) '())
-      ((null? program) (M_value_function '(funcall main) benv default_brace default_continue default_throw return*))
+      ((null? program) (M_value_funcall '(funcall main) benv default_brace default_continue default_throw return*))
       (else (outer_evaluate (rest_lines program) (M_state (first_line program) benv default_break default_continue default_throw return*) return*)))))
 
 ; benv: boxed env; env: env
@@ -67,11 +67,17 @@
       ((eq? keyword 'catch) M_state_catch)
       ((eq? keyword 'finally) M_state_finally)
       ((eq? keyword 'throw) M_state_throw)
-      ((eq? keyword 'funcall) M_value_function)
-      ((eq? keyword 'funciton) M_state_function)
+      ((eq? keyword 'funcall) M_state_funcall)
+      ((eq? keyword 'function) M_state_function)
       ((member keyword (expressions)) M_state_exp)
       (else keyword))))
 ;      (else (error 'keyword "Unknown or unimplemented keyword")))))
+
+(define M_state_funcall
+  (lambda (expression benv break continue throw return*)
+    (begin
+      (M_value_funcall expression benv break continue throw return*)
+      benv)))
 
 ; M_value:
 (define M_value
@@ -94,17 +100,46 @@
       ((eq? keyword 'return) M_value_return)
       ((eq? keyword 'if) (error 'no_value "If cannot be used as a value"))
       ((eq? keyword 'while) (error 'no_value "While cannot be used as a value"))
-      ((eq? keyword 'funcall) M_value_function)
+      ((eq? keyword 'funcall) M_value_funcall)
       ((member keyword (expressions)) M_value_exp)
       (else (error keyword "Unknown or unimplemented keyword")))))
 
+(define state_from_names_values
+  (lambda (names values)
+    (if (eq? (length names) (length values))
+             (cons (cons names (cons (map box values) '())) '())
+             (error 'mismatch "Mismatched parameter length"))))
+
+;(define evaluate
+;  (lambda (program benv brace break continue throw return*)
+
+(define make_closure
+  (lambda (benv parameter_names code)
+    (lambda (parameter_values _benv break continue throw return*)
+      (call/cc
+       (lambda (brace)
+         (evaluate code (box (add_state_to_environment (state_from_names_values parameter_names parameter_values) (unbox benv)))
+                   brace default_break default_continue throw return*))))))
+
+
+                                 ;code '())))))
+
 ; M_state_function: state call for _defining_ a function. This should add a binding from an atom to a closure to the environment
 ;  closure: (cons benv (cons parameters (cons code '())))
+;  code is a _function_ in the form (call_me '(parameters) benv break continue throw return*) that returns the value returned
+(define M_state_function
+  (lambda (expression benv break continue throw return*)
+    (add_to_benv benv (get_operand1 expression) (make_closure benv (get_operand2 expression) (get_operand3 expression)))))
 
+(define get_parameter_list cddr)
 
 ; M_value_funcall: probably similar to M_state_begin, but returns a value at the end
 ;  The replacing functions should take side efffects into account (I hope)
-
+(define M_value_funcall
+  (lambda (expression benv break continue throw return*)
+    (call/cc
+     (lambda (_return)
+       ((get_from_env benv (get_operand1 expression)) (map (lambda (m) (M_value m benv break continue throw return*)) (get_parameter_list expression)) benv break continue throw _return)))))
 
 ; M_state_begin: implemented for (begin ...) calls; (M_state_begin '(begin <expression>) state) -> state
 (define M_state_begin
@@ -142,7 +177,7 @@
   (lambda (declare benv break continue throw return*)
     (cond
       ((null? (cddr declare)) (add_to_benv benv (get_operand1 declare) '()))
-      ((in_benv? (get_operand1 declare) benv) (error 'declare "Cannot declare a var twice"))
+      ((in_state? (get_operand1 declare) (car (unbox benv))) (error 'declare "Cannot declare a var twice"))
       (else (add_to_benv (M_state (get_operand2 declare) benv break continue throw return*) (get_operand1 declare) (M_value (get_operand2 declare) benv break continue throw return*))))))
 
 ; M_value_var: implemented for (var ...) calls; (M_value_var '(var name)) | (M_value_var '(var name <epxression>)) -> value
@@ -336,6 +371,8 @@
   (lambda (state environment)
     (cons state environment)))
 
+(define pop_state_env cdr)
+
 (define remove_first_state_from_environment cdr)
 
 (define get_empty_state
@@ -356,9 +393,7 @@
 
 ; remove_narrow_scope: gets all scopes minus most narrow
 (define remove_narrow_scope cdr)
-(define remove_narrow_state
-  (lambda (env)
-    (cons (cdar env) '())))
+(define remove_narrow_state cdr)
   ;cdar)
 (define remove_narrow_scope_benv
   (lambda (benv)
@@ -387,6 +422,11 @@
 (define get_first_value
   (lambda (v)
     (unbox (caadar v))))
+
+(define maybe_unbox
+  (lambda (b)
+    (if (box? b) (unbox b) b)))
+
 (define get_vars caar)
 (define get_values cadar)
 (define rest_vars cdr)
