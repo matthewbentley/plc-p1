@@ -3,22 +3,39 @@
 ; - David Lance
 ; - Alex Tryjankowski
 
-(load "functionParser.scm")
+(load "simpleParser.scm")
 
 (define interpret
   (lambda (name)
     (display_val
      (call/cc
       (lambda (return*)
-        (evaluate (parser name) (get_empty_state) (lambda (v) v) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "continue outside of loop")) (lambda (s e) (error "Error thrown")) return*))))))
+        ;OLD_INNEREVALUATE(evaluate (parser name) (get_empty_state) (lambda (v) v) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "continue outside of loop")) (lambda (s e) (error "Error thrown")) return*))))))
+        (outer_evaluate (parser name) (get_empty_state) return*)))))) ; was get_empty_state
+
+(define base_break (lambda (v) (error "Break outside of loop")))
+(define base_continue (lambda (v) (error "continue outide of loop")))
+(define base_throw (lambda (v) (error "Error thrown")))
+(define base_brace (lambda (v) v))
+
+;how to call main using built state? should happen outside of evaluate.
+
+(define outer_evaluate
+  (lambda (program state return*)
+    (cond
+      ((null? state) '())
+      ;DEAD_TESTTHING((null? program) (brace (cdr state)))
+      ((null? program) (M_value_function '(funcall main) state base_brace base_continue base_throw return*))
+      ;DEAD_OLDEVAL((null? program) (evaluate '((funcall main)) state base_brace base_brace base_continue base_throw return*))
+      (else (outer_evaluate (rest_lines program) (M_state (first_line program) state base_break base_continue base_throw return*) return*)))))
 
 (define evaluate
   (lambda (program state brace break continue throw return*)
     (cond
-      ((null? state) '())
+      ((null? state) '()) ;no return
       ((null? program) (brace (cdr state)))
       (else (evaluate (rest_lines program) (M_state (first_line program) state break continue throw return*) brace break continue throw return*)))))
-
+    
 ; first_line: gets the first line of the program from the parsed out list
 (define first_line car)
 ; rest_line: gets the lines after the first of the program from the parsed out list
@@ -42,6 +59,7 @@
 (define state_dispatch
   (lambda (keyword)
     (cond
+      ((eq? keyword 'function) M_state_function)
       ((eq? keyword 'break) M_state_break)
       ((eq? keyword 'continue) M_state_continue)
       ((eq? keyword 'begin) M_state_begin)
@@ -74,6 +92,7 @@
 (define value_dispatch
   (lambda (keyword)
     (cond
+      ((eq? keyword 'funcall) M_value_function)
       ((eq? keyword 'var) M_value_var)
       ((eq? keyword '=) M_value_assign)
       ((eq? keyword 'return) M_value_return)
@@ -92,6 +111,18 @@
          (_begin (lambda (s) (brace (break s))) (lambda (s) (brace (continue s)))))))))
 
 (define get_body cdr)
+
+;M_state_function; implemented for (function ...) calls; Adds function to left most "state in scope of environment?"
+(define M_state_function
+  (lambda (expression s break continue throw return*)))
+
+(define get_function_name cadr)
+(define get_function_var caddr)
+(define get_function_body cadddr)
+
+;M_value_function; implemented for (function ...) calls; determines value of function if there is one (calls interpret on body)
+(define M_value_function
+  (lambda (expression s break continue throw return)))
 
 ; The finally part of a try/catch/finally block.  Very similar to M_state_begin
 (define M_state_finally
