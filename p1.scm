@@ -3,7 +3,7 @@
 ; - David Lance
 ; - Alex Tryjankowski
 
-(load "simpleParser.scm")
+(load "functionParser.scm")
 
 (define interpret
   (lambda (name)
