@@ -111,6 +111,12 @@
     (call/cc
      (lambda (brace)
        (evaluate (get_operand2 expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
+; M_state_brace: implemented for (begin ...) calls; (M_state_brace '(begin <expression>) state) -> state
+(define M_state_brace
+  (lambda (expression s)
+    (call/cc
+     (lambda (brace)
+       (evaluate (cdr expression) (construct_state (get_empty_scope) s) brace)))))
 
 ; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <epxression>) state) -> state
 (define M_state_var
