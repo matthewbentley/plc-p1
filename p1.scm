@@ -295,9 +295,16 @@
 ; - A state is a the cons of all scopes going from narrowest  -
 ; -   to widest with each car.                                -
 ; -------------------------------------------------------------
+;
+; scope: '((var1 var2 var3 var4 ...) (#&value1 #&value2 #&value3 #&value4 ...))
+;  where lower numbered var/value pairs are newer
+;  and #&value indicates a box containing 'value
+; state: '(scope1 scope2 scope3 ...)
+;  where lower numbered scopes are newer
+; environment: '(state1 state2 state3 ... globalstate)
+;  where lower numbered states are newer, and globalstate is always available
 
-; The state: '(((var3, var4, ...) (value3, value5, ...))
-;              ((var1, var2, ...) (value1, value2, ...))...)'
+
 (define get_empty_state
   (lambda ()
     (cons (get_empty_scope) '())))
