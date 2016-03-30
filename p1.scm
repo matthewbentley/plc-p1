@@ -10,7 +10,19 @@
     (display_val
      (call/cc
       (lambda (return*)
-        (evaluate (parser name) (box (get_empty_environment)) (lambda (v) v) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "continue outside of loop")) (lambda (s e) (error "Error thrown")) return*))))))
+        (outer_evaluate (parser name) (box (get_empty_environment)) return*))))))
+
+(define default_break (lambda (v) (error "Break outside of loop")))
+(define default_continue (lambda (v) (error "continue outide of loop")))
+(define default_throw (lambda (v) (error "Error thrown")))
+(define default_brace (lambda (v) v))
+
+(define outer_evaluate
+  (lambda (program benv return*)
+    (cond
+      ((null? benv) '())
+      ((null? program) (M_value_function '(funcall main) benv default_brace default_continue default_throw return*))
+      (else (outer_evaluate (rest_lines program) (M_state (first_line program) benv default_break default_continue default_throw return*) return*)))))
 
 ; benv: boxed env; env: env
 (define evaluate
