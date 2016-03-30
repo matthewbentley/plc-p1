@@ -90,11 +90,6 @@
        (let ((_begin (lambda (b c)
                        (remove_narrow_scope (evaluate (get_body expression) (add_narrow_scope s) brace b c throw return*))))) 
          (_begin (lambda (s) (brace (break s))) (lambda (s) (brace (continue s)))))))))
-;(define M_state_begin
-;  (lambda (expression s break continue throw return*)
-;    (call/cc
-;     (lambda (brace)
-;       (evaluate (get_body expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
 
 (define get_body cdr)
 
