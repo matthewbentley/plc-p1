@@ -16,12 +16,9 @@
   (lambda (program state brace break continue throw return*)
     (cond
       ((null? state) '())
-      ;((eq? (get_return_check state) 'return) (display_val (M_value (get_return_check state) state break continue throw return*)))
       ((null? program) (brace (cdr state)))
       (else (evaluate (rest_lines program) (M_state (first_line program) state break continue throw return*) brace break continue throw return*)))))
 
-; get_return_check: gets the beginning of the state, which is used to check if the state is in return format
-(define get_return_check car)
 ; first_line: gets the first line of the program from the parsed out list
 (define first_line car)
 ; rest_line: gets the lines after the first of the program from the parsed out list
@@ -90,14 +87,18 @@
   (lambda (expression s break continue throw return*)
     (call/cc
      (lambda (brace)
-       (evaluate (cdr expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
+       (evaluate (get_body expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
 
+(define get_body cdr)
+
+; The finally part of a try/catch/finally block.  Very similar to M_state_begin
 (define M_state_finally
   (lambda (expression s break continue throw return*)
     (call/cc
      (lambda (brace)
        (evaluate (get_operand1 expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
 
+; The catch part of try/catch/finally. Very similar to M_state_begin
 (define M_state_catch
   (lambda (expression s break continue throw return*)
     (call/cc
@@ -171,7 +172,6 @@
         (M_state (get_operand2 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*))))
 
 ; error_and: basic error catching and function in case of nonbooleans
-
 (define error_and
   (lambda (e1 e2)
     (if (and (bool? e1) (bool? e2))
@@ -179,7 +179,6 @@
         (error 'type "Operand 1 and 2 for and were not booleans"))))
 
 ; error_or: basic error catching or function in case of nonbooleans
-
 (define error_or
   (lambda (e1 e2)
     (if (and (bool? e1) (bool? e2))
@@ -194,13 +193,11 @@
         (error 'type "Not must take a bool"))))
 
 ; M_value_return: implemented for (return ...); note: return does not need an M_state, as the state doesn't matter after return; (M_value_return '(return <expression>) state) -> value
-
 (define M_value_return
   (lambda (expression s return*)
     ((return* (M_value (get_operand1 expression) s)))))
 
 ; M_state_if: implemented for (if ...); (M_state_if '(if <condition> <expression>) state) | (M_state_if '(<condition> <expression> <expression>) state) -> state
-
 (define M_state_if
   (lambda (expression s break continue throw return*)
     (cond
@@ -230,14 +227,17 @@
      (lambda (_break)
        (M_state_while_helper expression s _break continue throw return*)))))
 
+; (continue ...) -> jumps to next iteration of innermost loop
 (define M_state_continue
   (lambda (expression s break continue throw return*)
     (continue (remove_narrow_scope s))))
 
+; (break ...) -> jumps out of innermost loop
 (define M_state_break
   (lambda (expression s break continue throw return*)
     (break (remove_narrow_scope s))))
 
+; Makes the catch continuation.  If there is not catch block, use next catch "up".  If there is, calling this will call the call/cc for getting out of try, plus the whatever's in the catch block
 (define M_state_try_catch_helper
   (lambda (expression s break continue throw_old throw_cc return*)
     (if (null? expression)
@@ -246,8 +246,9 @@
           (throw_cc
            (call/cc
             (lambda (brace)
-              (evaluate (get_operand2 expression) (construct_state (cons '(e) (cons (cons v '()) '())) s) brace break continue throw_old return*))))))))
+              (evaluate (get_operand2 expression) (construct_state (scope_with_value 'e v) s) brace break continue throw_old return*))))))))
 
+; (try ...) -> if no throw is encountered, return (finally (try)) [sort of]. if throw is found, return (finally (catch (try_until_throw))) [sort of]
 (define M_state_try
   (lambda (expression s break continue throw return*)
     (M_state (get_operand3 expression)
@@ -255,14 +256,13 @@
       (lambda (throw_cc)
         (M_state (cons 'begin (get_operand1 expression)) s break continue (M_state_try_catch_helper (get_operand2 expression) s break continue throw throw_cc return*) return*)))
      break continue throw return*)))
-;        (M_state (cons 'begin (cons (get_operand1 expression) '())) s break continue (lambda (_s v) ((get_throw_catched _throw (get_operand2 expression) throw) (M_state (get_operand2 expression) _s break continue throw return*))) return*)))
-;     break continue throw return*)))
 
+; Actually do the throw
 (define M_state_throw
   (lambda (expression s break continue throw return*)
     (throw (remove_narrow_scope s) (get_operand1 expression))))
 
-
+; Pretty printing for true and false
 (define display_val
   (lambda (a)
     (cond
@@ -270,6 +270,7 @@
       ((eq? a #f) 'false)
       (else a))))
 
+; Actually call return on the value of what is being returned
 (define return
   (lambda (expression s break continue throw return*)
     (return* (M_value (get_operand1 expression) s break continue throw return*))))
@@ -300,6 +301,11 @@
 (define get_empty_scope
   (lambda ()
     '(() ())))
+
+; Almost empty scope: it has one value in it (useful for throws)
+(define scope_with_value
+  (lambda (e v)
+    (cons (cons e '()) (cons (cons v '()) '()))))
 
 ; remove_narrow_scope: gets all scopes minus most narrow
 (define remove_narrow_scope cdr)
