@@ -325,7 +325,7 @@
 ; Almost empty scope: it has one value in it (useful for throws)
 (define scope_with_value
   (lambda (e v)
-    (cons (cons e '()) (cons (cons v '()) '()))))
+    (cons (cons e '()) (cons (cons (box v) '()) '()))))
 
 ; remove_narrow_scope: gets all scopes minus most narrow
 (define remove_narrow_scope cdr)
@@ -336,13 +336,17 @@
 
 (define get_current_scope car)
 (define get_first_var caaar)
-(define get_first_value caadar)
+(define get_first_value
+  (lambda (v)
+    (unbox (caadar v))))
 (define get_vars caar)
 (define get_values cadar)
 (define rest_vars cdr)
 (define rest_values cdr)
 (define get_scope_vars car)
-(define get_scope_vals cadr)
+(define get_scope_vals
+  (lambda (v)
+    (map unbox (cadr v))))
 
 (define eq_scope?
   (lambda (scope1 scope2)
@@ -394,7 +398,7 @@
 ; add_to_state: adds a var with value to the narrowest scope in the state
 (define add_to_state
   (lambda (state var value)
-    (construct_state (construct_scope (cons var (get_vars state)) (cons value (get_values state)))
+    (construct_state (construct_scope (cons var (get_vars state)) (cons (box value) (get_values state)))
                      (remove_narrow_scope state))))
 
 ; remove_from_state: removes a var from the state starting with the narrrowest scope, does nothing if var is not in the state
@@ -418,7 +422,6 @@
                                                         (remove_narrow_scope state)))
       (else (add_to_state (remove_from_scope (remove_first_var state) var)
                           (get_first_var state) (get_first_value state))))))
-
 
 ; (replace_in_state state var value) -> state; replaces var with value in state
 (define replace_in_state
