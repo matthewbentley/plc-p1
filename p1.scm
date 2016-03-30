@@ -10,32 +10,16 @@
     (display_val
      (call/cc
       (lambda (return*)
-        ;OLD_INNEREVALUATE(evaluate (parser name) (get_empty_state) (lambda (v) v) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "continue outside of loop")) (lambda (s e) (error "Error thrown")) return*))))))
-        (outer_evaluate (parser name) (get_empty_state) return*)))))) ; was get_empty_state
+        (evaluate (parser name) (box (get_empty_environment)) (lambda (v) v) (lambda (v) (error "Break outside of loop")) (lambda (v) (error "continue outside of loop")) (lambda (s e) (error "Error thrown")) return*))))))
 
-(define base_break (lambda (v) (error "Break outside of loop")))
-(define base_continue (lambda (v) (error "continue outide of loop")))
-(define base_throw (lambda (v) (error "Error thrown")))
-(define base_brace (lambda (v) v))
-
-;how to call main using built state? should happen outside of evaluate.
-
-(define outer_evaluate
-  (lambda (program state return*)
-    (cond
-      ((null? state) '())
-      ;DEAD_TESTTHING((null? program) (brace (cdr state)))
-      ((null? program) (M_value_function '(funcall main) state base_brace base_continue base_throw return*))
-      ;DEAD_OLDEVAL((null? program) (evaluate '((funcall main)) state base_brace base_brace base_continue base_throw return*))
-      (else (outer_evaluate (rest_lines program) (M_state (first_line program) state base_break base_continue base_throw return*) return*)))))
-
+; benv: boxed env; env: env
 (define evaluate
-  (lambda (program state brace break continue throw return*)
+  (lambda (program benv brace break continue throw return*)
     (cond
-      ((null? state) '()) ;no return
-      ((null? program) (brace (cdr state)))
-      (else (evaluate (rest_lines program) (M_state (first_line program) state break continue throw return*) brace break continue throw return*)))))
-    
+      ((null? benv) '())
+      ((null? program) (brace benv))
+      (else (evaluate (rest_lines program) (M_state (first_line program) benv break continue throw return*) brace break continue throw return*)))))
+
 ; first_line: gets the first line of the program from the parsed out list
 (define first_line car)
 ; rest_line: gets the lines after the first of the program from the parsed out list
@@ -43,13 +27,13 @@
 
 ; M_state:
 (define M_state
-  (lambda (expression s break continue throw return*)
+  (lambda (expression benv break continue throw return*)
     (cond
-      ((null? expression) s) ; make '() a nop
-      ((number? expression) s) ; No change in state from a number
-      ((bool? expression) s) ; No change in state from a bool
-      ((not (list? expression)) s) ; No change in state from accessing a variable
-      (else ((state_dispatch (get_op expression)) expression s break continue throw return*)))))
+      ((null? expression) benv) ; make '() a nop
+      ((number? expression) benv) ; No change in state from a number
+      ((bool? expression) benv) ; No change in state from a bool
+      ((not (list? expression)) benv) ; No change in state from accessing a variable
+      (else ((state_dispatch (get_op expression)) expression benv break continue throw return*)))))
 
 (define expressions
   (lambda ()
@@ -59,7 +43,6 @@
 (define state_dispatch
   (lambda (keyword)
     (cond
-      ((eq? keyword 'function) M_state_function)
       ((eq? keyword 'break) M_state_break)
       ((eq? keyword 'continue) M_state_continue)
       ((eq? keyword 'begin) M_state_begin)
@@ -72,27 +55,27 @@
       ((eq? keyword 'catch) M_state_catch)
       ((eq? keyword 'finally) M_state_finally)
       ((eq? keyword 'throw) M_state_throw)
+      ((eq? keyword 'funciton) M_state_function)
       ((member keyword (expressions)) M_state_exp)
-      (else (error 'keyword "Unknown or unimplemented keyword")))))
+      (else keyword))))
+;      (else (error 'keyword "Unknown or unimplemented keyword")))))
 
 ; M_value:
 (define M_value
-  (lambda (expression s break continue throw return*)
+  (lambda (expression benv break continue throw return*)
     (cond
       ((null? expression) (error 'null "You cannot get the value of null"))
-      ((eq? (car s) 'return) (cadr s))
       ((number? expression) expression)
       ((bool? expression) expression)
       ((eq? expression 'true) #t)
       ((eq? expression 'false) #f)
-      ((not (list? expression)) (get_from_state s expression))
-      (else ((value_dispatch (get_op expression)) expression s break continue throw return*)))))
+      ((not (list? expression)) (get_from_env benv expression))
+      (else ((value_dispatch (get_op expression)) expression benv break continue throw return*)))))
 
 ; value_dispatch: returns the proper value function given the keyword from M_value
 (define value_dispatch
   (lambda (keyword)
     (cond
-      ((eq? keyword 'funcall) M_value_function)
       ((eq? keyword 'var) M_value_var)
       ((eq? keyword '=) M_value_assign)
       ((eq? keyword 'return) M_value_return)
@@ -103,81 +86,69 @@
 
 ; M_state_begin: implemented for (begin ...) calls; (M_state_begin '(begin <expression>) state) -> state
 (define M_state_begin
-  (lambda (expression s break continue throw return*)
+  (lambda (expression benv break continue throw return*)
     (call/cc
      (lambda (brace)
        (let ((_begin (lambda (b c)
-                       (remove_narrow_scope (evaluate (get_body expression) (add_narrow_scope s) brace b c throw return*))))) 
-         (_begin (lambda (s) (brace (break s))) (lambda (s) (brace (continue s)))))))))
+                       (remove_narrow_scope_benv (evaluate (get_body expression) (add_narrow_scope_benv benv) brace b c throw return*))))) 
+         (_begin (lambda (benv) (brace (break benv))) (lambda (benv) (brace (continue benv)))))))))
 
 (define get_body cdr)
 
-;M_state_function; implemented for (function ...) calls; Adds function to left most "state in scope of environment?"
-(define M_state_function
-  (lambda (expression s break continue throw return*)))
-
-(define get_function_name cadr)
-(define get_function_var caddr)
-(define get_function_body cadddr)
-
-;M_value_function; implemented for (function ...) calls; determines value of function if there is one (calls interpret on body)
-(define M_value_function
-  (lambda (expression s break continue throw return)))
-
 ; The finally part of a try/catch/finally block.  Very similar to M_state_begin
 (define M_state_finally
-  (lambda (expression s break continue throw return*)
+  (lambda (expression benv break continue throw return*)
     (call/cc
      (lambda (brace)
-       (evaluate (get_operand1 expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
+       (evaluate (get_operand1 expression) (construct_state_benv (get_empty_scope) benv) brace break continue throw return*)))))
 
 ; The catch part of try/catch/finally. Very similar to M_state_begin
 (define M_state_catch
-  (lambda (expression s break continue throw return*)
+  (lambda (expression benv break continue throw return*)
     (call/cc
      (lambda (brace)
-       (evaluate (get_operand2 expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
+       (evaluate (get_operand2 expression) (construct_state_benv (get_empty_scope) benv) brace break continue throw return*)))))
 ; M_state_brace: implemented for (begin ...) calls; (M_state_brace '(begin <expression>) state) -> state
 (define M_state_brace
-  (lambda (expression s)
+  (lambda (expression benv)
     (call/cc
      (lambda (brace)
-       (evaluate (cdr expression) (construct_state (get_empty_scope) s) brace)))))
+       (evaluate (cdr expression) (construct_state_benv (get_empty_scope) benv) brace)))))
 
 ; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <epxression>) state) -> state
 (define M_state_var
-  (lambda (declare s break continue throw return*)
+  (lambda (declare benv break continue throw return*)
     (cond
-      ((null? (cddr declare)) (add_to_state s (get_operand1 declare) '()))
-      ((in_state? (get_operand1 declare) s) (error 'declare "Cannot declare a var twice"))
-      (else (add_to_state (M_state (get_operand2 declare) s break continue throw return*) (get_operand1 declare) (M_value (get_operand2 declare) s break continue throw return*))))))
+      ((null? (cddr declare)) (add_to_benv benv (get_operand1 declare) '()))
+      ((in_benv? (get_operand1 declare) benv) (error 'declare "Cannot declare a var twice"))
+      (else (add_to_benv (M_state (get_operand2 declare) benv break continue throw return*) (get_operand1 declare) (M_value (get_operand2 declare) benv break continue throw return*))))))
 
 ; M_value_var: implemented for (var ...) calls; (M_value_var '(var name)) | (M_value_var '(var name <epxression>)) -> value
 (define M_value_var
-  (lambda (declare s)
+  (lambda (declare benv)
     (if (null? (cddr declare))
         '()
-        (M_value (get_operand2 declare) s))))
+        (M_value (get_operand2 declare) benv))))
 
 ; M_state_assign: implemented for (= ...) calls; (M_state_assign '(= name <expression>) state) -> state
 (define M_state_assign
-  (lambda (assign s break continue throw return*)
-    (if (not (in_state? (get_operand1 assign) s))
+  (lambda (assign benv break continue throw return*)
+    (if (not (in_benv? (get_operand1 assign) benv))
         (error 'var "Undeclared var")
-        (replace_in_state (M_state (get_operand2 assign) s break continue throw return*) (get_operand1 assign) (M_value (get_operand2 assign) s break continue throw return*)))))
+        (replace_in_benv (M_state (get_operand2 assign) benv break continue throw return*) (get_operand1 assign) (M_value (get_operand2 assign) benv break continue throw return*)))))
 
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
 (define M_value_assign
-  (lambda (assign s break continue throw return*)
-    (M_value (get_operand2 assign) s break continue throw return*)))
+  (lambda (assign benv break continue throw return*)
+    (M_value (get_operand2 assign) benv break continue throw return*)))
 
 ; M_value_exp: 
 (define M_value_exp
-  (lambda (expression s break continue throw return*)
+  (lambda (expression benv break continue throw return*)
     (cond
-      ((and (eq? (get_op expression) '-) (null? (cddr expression))) (* -1 (M_value (get_operand1 expression) s break continue throw return*)))
-      ((eq? (get_op expression) '!) (error_not (M_value (get_operand1 expression) s break continue throw return*)))
-      (else ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) s break continue throw return*) (M_value (get_operand2 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*))))))
+      ((and (eq? (get_op expression) '-) (null? (cddr expression))) (* -1 (M_value (get_operand1 expression) benv break continue throw return*)))
+      ((eq? (get_op expression) '!) (error_not (M_value (get_operand1 expression) benv break continue throw return*)))
+      (else ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) benv break continue throw return*) (M_value (get_operand2 expression) (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return*))))))
 
 ; get_exp_op: returns the functions for any expression
 (define get_exp_op
@@ -205,10 +176,10 @@
 
 ; M_state_exp: the expression itself doesn't change the state, but the values operated on might
 (define M_state_exp
-  (lambda (expression s break continue throw return*)
+  (lambda (expression benv break continue throw return*)
     (if (or (and (eq? (get_op expression) '-) (null? (cddr expression))) (eq? (get_op expression) '!))
-        (M_state (get_operand1 expression) s break continue throw return*)
-        (M_state (get_operand2 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*))))
+        (M_state (get_operand1 expression) benv break continue throw return*)
+        (M_state (get_operand2 expression) (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return*))))
 
 ; error_and: basic error catching and function in case of nonbooleans
 (define error_and
@@ -233,71 +204,71 @@
 
 ; M_value_return: implemented for (return ...); note: return does not need an M_state, as the state doesn't matter after return; (M_value_return '(return <expression>) state) -> value
 (define M_value_return
-  (lambda (expression s return*)
-    ((return* (M_value (get_operand1 expression) s)))))
+  (lambda (expression benv return*)
+    ((return* (M_value (get_operand1 expression) benv)))))
 
 ; M_state_if: implemented for (if ...); (M_state_if '(if <condition> <expression>) state) | (M_state_if '(<condition> <expression> <expression>) state) -> state
 (define M_state_if
-  (lambda (expression s break continue throw return*)
+  (lambda (expression benv break continue throw return*)
     (cond
-      ((M_value (get_operand1 expression) s break continue throw return*)
+      ((M_value (get_operand1 expression) benv break continue throw return*)
        (M_state (get_operand2 expression)
-                (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*))
+                (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return*))
       ((not (null? (cdddr expression)))
        (M_state (get_operand3 expression)
-                (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*))
-      (else s))))
+                (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return*))
+      (else benv))))
 
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
 ; TODO: stack grows w/ unnessesary call/cc's (TODO: rewrite in cps)
 (define M_state_while
-  (lambda (expression s break continue throw return*)
+  (lambda (expression benv break continue throw return*)
     (call/cc
      (lambda (_break)
-       (letrec ((loop (lambda (expression s)
-                        (if (M_value (get_operand1 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return)
+       (letrec ((loop (lambda (expression benv)
+                        (if (M_value (get_operand1 expression) (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return)
                             (loop expression (M_state (get_operand2 expression)
-                                                      (M_state (get_operand1 expression) s _break continue throw return*)
-                                                      (lambda (s) (_break s))
-                                                      (lambda (s) (_break (loop expression s)))
+                                                      (M_state (get_operand1 expression) benv _break continue throw return*)
+                                                      (lambda (benv) (_break benv))
+                                                      (lambda (benv) (_break (loop expression benv)))
                                                       throw return*))
-                            (M_state (get_operand1 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*)))))
-         (loop expression s))))))
+                            (M_state (get_operand1 expression) (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return*)))))
+         (loop expression benv))))))
 
 ; (continue ...) -> jumps to next iteration of innermost loop
 (define M_state_continue
-  (lambda (expression s break continue throw return*)
-    (continue (remove_narrow_scope s))))
+  (lambda (expression benv break continue throw return*)
+    (continue (remove_narrow_scope_benv benv))))
 
 ; (break ...) -> jumps out of innermost loop
 (define M_state_break
-  (lambda (expression s break continue throw return*)
-    (break (remove_narrow_scope s))))
+  (lambda (expression benv break continue throw return*)
+    (break (remove_narrow_scope_benv benv))))
 
 ; Makes the catch continuation.  If there is not catch block, use next catch "up".  If there is, calling this will call the call/cc for getting out of try, plus the whatever's in the catch block
 (define M_state_try_catch_helper
-  (lambda (expression s break continue throw_old throw_cc return*)
+  (lambda (expression benv break continue throw_old throw_cc return*)
     (if (null? expression)
-        (lambda (s v) (throw_old s v))
-        (lambda (s v)
+        (lambda (benv v) (throw_old benv v))
+        (lambda (benv v)
           (throw_cc
            (call/cc
             (lambda (brace)
-              (evaluate (get_operand2 expression) (construct_state (scope_with_value 'e v) s) brace break continue throw_old return*))))))))
+              (evaluate (get_operand2 expression) (construct_state_benv (scope_with_value 'e v) benv) brace break continue throw_old return*))))))))
 
 ; (try ...) -> if no throw is encountered, return (finally (try)) [sort of]. if throw is found, return (finally (catch (try_until_throw))) [sort of]
 (define M_state_try
-  (lambda (expression s break continue throw return*)
+  (lambda (expression benv break continue throw return*)
     (M_state (get_operand3 expression)
              (call/cc
               (lambda (throw_cc)
-                (M_state (cons 'begin (get_operand1 expression)) s break continue (M_state_try_catch_helper (get_operand2 expression) s break continue throw throw_cc return*) return*)))
+                (M_state (cons 'begin (get_operand1 expression)) benv break continue (M_state_try_catch_helper (get_operand2 expression) benv break continue throw throw_cc return*) return*)))
              break continue throw return*)))
 
 ; Actually do the throw
 (define M_state_throw
-  (lambda (expression s break continue throw return*)
-    (throw (remove_narrow_scope s) (get_operand1 expression))))
+  (lambda (expression benv break continue throw return*)
+    (throw (remove_narrow_scope_benv benv) (get_operand1 expression))))
 
 ; Pretty printing for true and false
 (define display_val
@@ -309,8 +280,8 @@
 
 ; Actually call return on the value of what is being returned
 (define return
-  (lambda (expression s break continue throw return*)
-    (return* (M_value (get_operand1 expression) s break continue throw return*))))
+  (lambda (expression benv break continue throw return*)
+    (return* (M_value (get_operand1 expression) benv break continue throw return*))))
 
 (define bool?
   (lambda (b)
@@ -364,10 +335,31 @@
 
 ; remove_narrow_scope: gets all scopes minus most narrow
 (define remove_narrow_scope cdr)
+(define remove_narrow_state
+  (lambda (env)
+    (cons (cdar env) '())))
+  ;cdar)
+(define remove_narrow_scope_benv
+  (lambda (benv)
+    (begin
+      (set-box! benv
+                (cons (remove_narrow_scope (car (unbox benv))) (cdr (unbox benv))))
+      benv)))
+
+(define remove_narrow_scope_env
+  (lambda (env)
+    (cons (remove_narrow_scope (car env)) (cdr env))))
 
 (define add_narrow_scope
   (lambda (state)
     (cons empty_scope_state state)))
+
+(define add_narrow_scope_benv
+  (lambda (benv)
+    (begin
+      (set-box! benv
+                (cons (cons empty_scope_state (car (unbox benv))) (cdr (unbox benv))))
+      benv)))
 
 (define get_current_scope car)
 (define get_first_var caaar)
@@ -408,12 +400,24 @@
   (lambda (scope state)
     (cons scope state)))
 
+(define construct_state_env
+  (lambda (scope env)
+    (cons (cons scope (car env)) (cdr env))))
+
+(define construct_state_benv
+  (lambda (scope benv)
+    (begin
+      (set-box! benv
+                (construct_state_env scope (unbox benv)))
+      benv)))
+
 ; null_current_scope?: checks if the vars or the values are null of current scope
 (define null_current_scope?
   (lambda (state)
     (cond
       ((null? state) #t)
-      (else (or (null? (get_vars state)) (null? (get_values state)))))))
+      ((null? (car state)) #t)
+      (else (or (null? (car (car state))) (null? (cdr (car state))))))))
 
 ; null_state?: checks if all the scopes are null
 (define null_state?
@@ -421,6 +425,10 @@
     (cond
       ((null? state) #t)
       (else (and (null_current_scope? state) (null_state? (remove_narrow_scope state)))))))
+
+(define null_env?
+  (lambda (env)
+    (null? env)))
 
 ; remove_first_var: essentially "cdrscope"
 (define remove_first_var
@@ -436,6 +444,17 @@
   (lambda (state var value)
     (construct_state (construct_scope (cons var (get_vars state)) (cons (box value) (get_values state)))
                      (remove_narrow_scope state))))
+
+(define add_to_env
+  (lambda (env var value)
+    (cons (add_to_state (car env) var value) (cdr env))))
+
+(define add_to_benv
+  (lambda (benv var value)
+    (begin
+      (set-box! benv
+                (add_to_env (unbox benv) var value))
+      benv)))
 
 ; remove_from_state: removes a var from the state starting with the narrrowest scope, does nothing if var is not in the state
 (define remove_from_state
@@ -478,15 +497,52 @@
     (if (eq? (car vars) var) (set-box! (car values) value)                      
         (replace_in_scope (cdr vars) (cdr values) var value))))
 
-; (get_from_state state var) -> value; gets the value of var from the state
-(define get_from_state
-  (lambda (state var)
+(define replace_in_env
+  (lambda (env var value)
     (cond
-      ((null_state? state) (error 'var "Undeclared var"))
-      ((null_current_scope? state) (get_from_state (remove_narrow_scope state) var))
+      ((null? env) '())
+      ((null_env? env) (get_empty_environment))
+      ((in_state? var (car env)) (cons (replace_in_state (car env) var value) (cdr env)))
+      (else (cons (car env) (replace_in_env (cdr env) var value))))))
+
+(define replace_in_benv
+  (lambda (benv var value)
+    (begin
+      (set-box! benv
+                (replace_in_env (unbox benv) var value))
+      benv)))
+
+; (get_from_env env var) -> value; gets the value of var from the state
+(define get_from_env
+  (lambda (benv var)
+    (call/cc
+     (lambda (found)
+       (letrec ((env (maybe_unbox benv))
+                (fun (lambda (env var found)
+                       (cond
+                         ((null? env) (error 'var "Undeclared var"))
+                         ((null_state? (car env)) (fun (remove_narrow_state env) var found))
+                         (else (and (get_from_state (car env) var found) (fun (remove_narrow_state env) var found)))))))
+         (fun env var found))))))
+
+(define maybe_unbox
+  (lambda (b)
+    (cond
+      ((box? b) (unbox b))
+      (else b))))
+                                                                                        
+;           ((and (eq? (get_first_var state) var) (null? (get_first_value state))) (error 'var "Unassigned variable"))
+ ;          ((eq? (get_first_var state) var) (get_first_value state))
+  ;         (else (get_from_env (remove_first_var state) var))))))))
+
+(define get_from_state
+  (lambda (state var found)
+    (cond
+      ((null_state? state) '())
+      ((null_current_scope? state) (get_from_state (remove_narrow_scope state) var found))
       ((and (eq? (get_first_var state) var) (null? (get_first_value state))) (error 'var "Unassigned variable"))
-      ((eq? (get_first_var state) var) (get_first_value state))
-      (else (get_from_state (remove_first_var state) var)))))
+      ((eq? (get_first_var state) var) (found (get_first_value state)))
+      (else (get_from_state (remove_first_var state) var found)))))
 
 ; (in_state? var s) -> bool; checks if var is a declared variable in s
 (define in_state?
@@ -496,3 +552,13 @@
       ((null_current_scope? s) (in_state? var (remove_narrow_scope  s)))
       ((eq? (get_first_var s) var) #t)
       (else (in_state? var (remove_first_var s))))))
+
+(define in_env?
+  (lambda (var env)
+    (cond
+      ((null_env? env) #f)
+      (else (or (in_state? var (car env)) (in_env? var (cdr env)))))))
+
+(define in_benv?
+  (lambda (var benv)
+    (in_env? var (unbox benv))))
