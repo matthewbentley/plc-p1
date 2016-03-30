@@ -87,7 +87,14 @@
   (lambda (expression s break continue throw return*)
     (call/cc
      (lambda (brace)
-       (evaluate (get_body expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
+       (let ((_begin (lambda (b c)
+                            (remove_narrow_scope (evaluate (get_body expression) (add_narrow_scope s) brace b c throw return*))))) 
+       (_begin (lambda (s) (brace (break s))) (lambda (s) (brace (continue s)))))))))
+;(define M_state_begin
+;  (lambda (expression s break continue throw return*)
+;    (call/cc
+;     (lambda (brace)
+;       (evaluate (get_body expression) (construct_state (get_empty_scope) s) brace break continue throw return*)))))
 
 (define get_body cdr)
 
@@ -140,7 +147,7 @@
         ((eq? (get_op expression) '!) (error_not (M_value (get_operand1 expression) s break continue throw return*)))
         (else ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) s break continue throw return*) (M_value (get_operand2 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*))))))
 
-; get_exp_op: returns the functions for any experssion
+; get_exp_op: returns the functions for any expression
 (define get_exp_op
   (lambda (o)
     (cond
@@ -211,21 +218,19 @@
 
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
 ; TODO: stack grows w/ unnessesary call/cc's (TODO: rewrite in cps)
-(define M_state_while_helper
-  (lambda (expression s break continue throw return*)
-       (if (M_value (get_operand1 expression) s break continue throw return*)
-           (M_state_while_helper expression
-                          (call/cc
-                           (lambda (_continue)
-                             (M_state_while_helper expression (M_state (get_operand2 expression) (M_state (get_operand1 expression) s break _continue throw return*) break _continue throw return*) break _continue throw return*)))
-                          break continue throw return*)
-           (break (M_state (get_operand1 expression) s break continue throw return*)))))
-
 (define M_state_while
   (lambda (expression s break continue throw return*)
     (call/cc
      (lambda (_break)
-       (M_state_while_helper expression s _break continue throw return*)))))
+       (letrec ((loop (lambda (expression s)
+                        (if (M_value (get_operand1 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return)
+                            (loop expression (M_state (get_operand2 expression)
+                                                     (M_state (get_operand1 expression) s _break continue throw return*)
+                                                     (lambda (s) (_break s))
+                                                     (lambda (s) (_break (loop expression s)))
+                                                     throw return*))
+                            (M_state (get_operand1 expression) (M_state (get_operand1 expression) s break continue throw return*) break continue throw return*)))))
+     (loop expression s))))))
 
 ; (continue ...) -> jumps to next iteration of innermost loop
 (define M_state_continue
@@ -302,6 +307,8 @@
   (lambda ()
     '(() ())))
 
+(define empty_scope_state '(()()))
+
 ; Almost empty scope: it has one value in it (useful for throws)
 (define scope_with_value
   (lambda (e v)
@@ -309,6 +316,11 @@
 
 ; remove_narrow_scope: gets all scopes minus most narrow
 (define remove_narrow_scope cdr)
+
+(define add_narrow_scope
+  (lambda (state)
+    (cons empty_scope_state state)))
+
 (define get_current_scope car)
 (define get_first_var caaar)
 (define get_first_value caadar)
