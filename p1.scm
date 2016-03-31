@@ -78,7 +78,6 @@
     (begin
       (M_value_funcall expression benv break continue throw return*)
       benv)))
-
 ; M_value:
 (define M_value
   (lambda (expression benv break continue throw return*)
@@ -192,7 +191,7 @@
   (lambda (assign benv break continue throw return*)
     (if (not (in_benv? (get_operand1 assign) benv))
         (error 'var "Undeclared var")
-        (replace_in_benv (M_state (get_operand2 assign) benv break continue throw return*) (get_operand1 assign) (M_value (get_operand2 assign) benv break continue throw return*)))))
+        (replace_in_benv benv (get_operand1 assign) (M_value (get_operand2 assign) benv break continue throw return*)))))
 
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
 (define M_value_assign
