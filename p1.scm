@@ -309,7 +309,7 @@
           (throw_cc
            (call/cc
             (lambda (brace)
-              (evaluate (get_operand2 expression) (construct_state_benv (scope_with_value 'e v) benv) brace break continue throw_old return*))))))))
+              (evaluate (get_operand2 expression) (construct_state_benv (scope_with_value 'e v) benv) (lambda (v) (brace (remove_narrow_scope_benv v))) break continue throw_old return*))))))))
 
 ; (try ...) -> if no throw is encountered, return (finally (try)) [sort of]. if throw is found, return (finally (catch (try_until_throw))) [sort of]
 (define M_state_try
