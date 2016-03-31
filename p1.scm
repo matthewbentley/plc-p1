@@ -162,9 +162,9 @@
 ; The catch part of try/catch/finally. Very similar to M_state_begin
 (define M_state_catch
   (lambda (expression benv break continue throw return*)
-    (call/cc
-     (lambda (brace)
-       (evaluate (get_operand2 expression) (construct_state_benv (get_empty_scope) benv) brace break continue throw return*)))))
+     (call/cc
+      (lambda (brace)
+        (evaluate (get_operand2 expression) (construct_state_benv (get_empty_scope) benv) brace break continue throw return*)))))
 ; M_state_brace: implemented for (begin ...) calls; (M_state_brace '(begin <expression>) state) -> state
 (define M_state_brace
   (lambda (expression benv)
@@ -305,8 +305,8 @@
 (define M_state_try_catch_helper
   (lambda (expression benv break continue throw_old throw_cc return*)
     (if (null? expression)
-        (lambda (benv v) (throw_old benv v))
-        (lambda (benv v)
+        (lambda (_benv v) (throw_old _benv v))
+        (lambda (_benv v)
           (throw_cc
            (call/cc
             (lambda (brace)
@@ -316,15 +316,16 @@
 (define M_state_try
   (lambda (expression benv break continue throw return*)
     (M_state (get_operand3 expression)
-             (call/cc
-              (lambda (throw_cc)
-                (M_state (cons 'begin (get_operand1 expression)) benv break continue (M_state_try_catch_helper (get_operand2 expression) benv break continue throw throw_cc return*) return*)))
-             break continue throw return*)))
+              (call/cc
+               (lambda (throw_cc)
+                 (M_state (cons 'begin (get_operand1 expression)) benv break continue (M_state_try_catch_helper (get_operand2 expression) benv break continue throw throw_cc return*) return*)))
+              break continue throw return*)))
 
 ; Actually do the throw
 (define M_state_throw
   (lambda (expression benv break continue throw return*)
-    (throw (remove_narrow_scope_benv benv) (get_operand1 expression))))
+    (letrec ((e (M_value (get_operand1 expression) benv break continue throw return*)))
+      (throw (remove_narrow_scope_benv benv) e))))
 
 ; Pretty printing for true and false
 (define display_val
@@ -374,6 +375,13 @@
 (define pop_state_env cdr)
 
 (define remove_first_state_from_environment cdr)
+
+(define remove_first_state_from_benv
+  (lambda (benv)
+    (begin
+      (set-box! benv
+                (cdr (unbox benv)))
+      benv)))
 
 (define get_empty_state
   (lambda ()
