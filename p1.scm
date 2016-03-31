@@ -171,7 +171,7 @@
      (lambda (brace)
        (evaluate (cdr expression) (construct_state_benv (get_empty_scope) benv) brace)))))
 
-; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <epxression>) state) -> state
+; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <expression>) state) -> state
 (define M_state_var
   (lambda (declare benv break continue throw return*)
     (cond
@@ -179,7 +179,7 @@
       ((in_state? (get_operand1 declare) (car (unbox benv))) (error 'declare "Cannot declare a var twice"))
       (else (add_to_benv (M_state (get_operand2 declare) benv break continue throw return*) (get_operand1 declare) (M_value (get_operand2 declare) benv break continue throw return*))))))
 
-; M_value_var: implemented for (var ...) calls; (M_value_var '(var name)) | (M_value_var '(var name <epxression>)) -> value
+; M_value_var: implemented for (var ...) calls; (M_value_var '(var name)) | (M_value_var '(var name <expression>)) -> value
 (define M_value_var
   (lambda (declare benv)
     (if (null? (cddr declare))
@@ -315,9 +315,9 @@
 (define M_state_try
   (lambda (expression benv break continue throw return*)
     (M_state (get_operand3 expression)
-              (call/cc
+              (remove_narrow_scope_benv (call/cc
                (lambda (throw_cc)
-                 (M_state (cons 'begin (get_operand1 expression)) benv break continue (M_state_try_catch_helper (get_operand2 expression) benv break continue throw throw_cc return*) return*)))
+                 (M_state (cons 'begin (get_operand1 expression)) benv break continue (M_state_try_catch_helper (get_operand2 expression) benv break continue throw throw_cc return*) return*))))
               break continue throw return*)))
 
 ; Actually do the throw
