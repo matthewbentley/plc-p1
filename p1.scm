@@ -355,7 +355,7 @@
 (define get_all_but_main
   (lambda (l)
     (cond
-      ((null? l) (error 'main "No main function"))
+      ((null? l) '())
       ((eq? (get_vars l) 'static-function) (rest_vars l))
       (else (cons (get_op l) (get_all_but_main (rest_vars l)))))))
 
