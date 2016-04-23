@@ -5,10 +5,6 @@
 
 (load "classParser.scm")
 
-(define test
-  (lambda (name)
-    (parser name)))
-
 (define interpret
   (lambda (name)
     (display_val
@@ -110,8 +106,8 @@
 (define state_from_names_values
   (lambda (names values)
     (if (eq? (length names) (length values))
-             (cons (cons names (cons (map box values) '())) '())
-             (error 'mismatch "Mismatched parameter length"))))
+        (cons (cons names (cons (map box values) '())) '())
+        (error 'mismatch "Mismatched parameter length"))))
 
 ;(define evaluate
 ;  (lambda (program benv brace break continue throw return*)
@@ -125,7 +121,7 @@
                    brace default_break default_continue throw return*))))))
 
 
-                                 ;code '())))))
+;code '())))))
 
 ; M_state_function: state call for _defining_ a function. This should add a binding from an atom to a closure to the environment
 ;  closure: (cons benv (cons parameters (cons code '())))
@@ -165,9 +161,9 @@
 ; The catch part of try/catch/finally. Very similar to M_state_begin
 (define M_state_catch
   (lambda (expression benv break continue throw return*)
-     (call/cc
-      (lambda (brace)
-        (evaluate (get_operand2 expression) (construct_state_benv (get_empty_scope) benv) brace break continue throw return*)))))
+    (call/cc
+     (lambda (brace)
+       (evaluate (get_operand2 expression) (construct_state_benv (get_empty_scope) benv) brace break continue throw return*)))))
 ; M_state_brace: implemented for (begin ...) calls; (M_state_brace '(begin <expression>) state) -> state
 (define M_state_brace
   (lambda (expression benv)
@@ -287,10 +283,10 @@
        (letrec ((loop (lambda (expression benv)
                         (if (M_value (get_operand1 expression) (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return)
                             (loop expression (remove_narrow_scope_benv (M_state (get_operand2 expression)
-                                                      (M_state (get_operand1 expression) benv _break continue throw return*)
-                                                      (lambda (benv) (_break benv))
-                                                      (lambda (benv) (_break (loop expression benv)))
-                                                      throw return*)))
+                                                                                (M_state (get_operand1 expression) benv _break continue throw return*)
+                                                                                (lambda (benv) (_break benv))
+                                                                                (lambda (benv) (_break (loop expression benv)))
+                                                                                throw return*)))
                             (M_state (get_operand1 expression) (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return*)))))
          (loop expression benv))))))
 
@@ -319,10 +315,10 @@
 (define M_state_try
   (lambda (expression benv break continue throw return*)
     (M_state (get_operand3 expression)
-              (remove_narrow_scope_benv (call/cc
-               (lambda (throw_cc)
-                 (M_state (cons 'begin (get_operand1 expression)) benv break continue (M_state_try_catch_helper (get_operand2 expression) benv break continue throw throw_cc return*) return*))))
-              break continue throw return*)))
+             (remove_narrow_scope_benv (call/cc
+                                        (lambda (throw_cc)
+                                          (M_state (cons 'begin (get_operand1 expression)) benv break continue (M_state_try_catch_helper (get_operand2 expression) benv break continue throw throw_cc return*) return*))))
+             break continue throw return*)))
 
 ; Actually do the throw
 (define M_state_throw
@@ -380,6 +376,41 @@
       ((eq? (get_vars l) 'static-function) (rest_vars l))
       (else (cons (get_op l) (get_all_but_main (rest_vars l)))))))
 
+(define get_parent_name
+  (lambda (extends)
+    (if (null? extends) (cons '()'())
+        (cons (get_operand1 extends) '()))))
+
+(define create_class
+  (lambda (class_code)
+    (cons (cons (get_operand1 class_code) (get_parent_name (get_operand2 class_code)))
+          (cons (get_all_but_main (get_operand3 class_code))
+                (cons (get_main_from_code (get_operand3 class_code)) '())))))
+
+(define get_class_from_classes
+  (lambda (classes name)
+    (cond
+      ((null? classes) '())
+      ((eq? name (caaar classes)) (car classes))
+      (else (get_class_from_classes (cdr classes) name)))))
+
+(define eval_constructor
+  (lambda (program benv return*)
+    (cond
+      ((null? benv) '())
+      ((null? program) benv)
+      (else (eval_constructor (rest_lines program) (M_state (first_line program) benv default_break default_continue default_throw return*) return*)))))
+
+(define create_object_benv
+  (lambda (constructor_code)
+    (eval_constructor constructor_code (box (get_empty_environment)) (lambda (v) (error "You can't return in a constructor, silly")))))
+
+(define instantiate
+  (lambda (classes name)
+    (if (null? (cadar (get_class_from_classes classes name)))
+        (cons '() (cons (create_object_benv (get_operand1 (get_class_from_classes classes name))) '()))
+        (cons (instantiate classes (cadar (get_class_from_classes classes name))) (cons (create_object_benv (get_operand1 (get_class_from_classes classes name))) '())))))
+
 
 ; ------------------------ STATE STUFF ------------------------
 ; - A scope is the current set of {} that the program is in.  -
@@ -433,7 +464,7 @@
 ; remove_narrow_scope: gets all scopes minus most narrow
 (define remove_narrow_scope cdr)
 (define remove_narrow_state cdr)
-  ;cdar)
+;cdar)
 (define remove_narrow_scope_benv
   (lambda (benv)
     (begin
@@ -590,7 +621,7 @@
       (else (begin
               (replace_in_scope (get_scope_vars (get_current_scope state)) (get_scope_boxed_vals (get_current_scope state)) var value)
               state)))))
-      ;      (else (add_to_state (remove_from_scope state var) var value)))))
+;      (else (add_to_state (remove_from_scope state var) var value)))))
 
 (define replace_in_scope
   (lambda (vars values var value)
@@ -624,10 +655,10 @@
                          ((null_state? (car env)) (fun (remove_narrow_state env) var found))
                          (else (and (get_from_state (car env) var found) (fun (remove_narrow_state env) var found)))))))
          (fun env var found))))))
-                                                                                        
+
 ;           ((and (eq? (get_first_var state) var) (null? (get_first_value state))) (error 'var "Unassigned variable"))
- ;          ((eq? (get_first_var state) var) (get_first_value state))
-  ;         (else (get_from_env (remove_first_var state) var))))))))
+;          ((eq? (get_first_var state) var) (get_first_value state))
+;         (else (get_from_env (remove_first_var state) var))))))))
 
 (define get_from_state
   (lambda (state var found)
