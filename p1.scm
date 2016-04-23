@@ -352,6 +352,27 @@
 (define get_operand2 caddr)
 (define get_operand3 cadddr)
 
+; ------------------------ CLASS STUFF ------------------------
+
+(define get_main_from_code
+  (lambda (code)
+    (cond
+      ((null? code) '())
+      ((list? (get_next_line code))
+       (if (eq? (get_keyword (get_next_line code)) 'static-function)
+           (if (eq? (get_second_operand (get_next_line code)) 'main)
+               (get_next_line code)
+               (get_main_from_code (get_rest_lines code)))
+           (get_main_from_code (get_rest_lines code))))
+      ((null? (get_rest_lines code)) '())
+      (else '()))))
+
+
+(define get_next_line car)
+(define get_keyword car)
+(define get_second_operand cadr)
+(define get_rest_lines cdr)
+
 
 ; ------------------------ STATE STUFF ------------------------
 ; - A scope is the current set of {} that the program is in.  -
