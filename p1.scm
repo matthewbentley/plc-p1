@@ -412,6 +412,12 @@
         (cons (instantiate classes (cadar (get_class_from_classes classes name))) (cons (create_object_benv (get_operand1 (get_class_from_classes classes name))) '())))))
 
 
+(define create_classes
+  (lambda (code)
+    (if (null? code)
+        '()
+        (cons (create_class (car code)) (create_classes (cdr code))))))
+
 ; ------------------------ STATE STUFF ------------------------
 ; - A scope is the current set of {} that the program is in.  -
 ; - A state is a the cons of all scopes going from narrowest  -
