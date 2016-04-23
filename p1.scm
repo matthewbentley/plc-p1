@@ -352,6 +352,13 @@
 (define get_operand2 caddr)
 (define get_operand3 cadddr)
 
+(define get_all_but_main
+  (lambda (l)
+    (cond
+      ((null? l) (error 'main "No main function"))
+      ((eq? (get_vars l) 'static-function) (rest_vars l))
+      (else (cons (get_op l) (get_all_but_main (rest_vars l)))))))
+
 
 ; ------------------------ STATE STUFF ------------------------
 ; - A scope is the current set of {} that the program is in.  -
