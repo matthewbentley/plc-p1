@@ -3,7 +3,11 @@
 ; - David Lance
 ; - Alex Tryjankowski
 
-(load "functionParser.scm")
+(load "classParser.scm")
+
+(define test
+  (lambda (name)
+    (parser name)))
 
 (define interpret
   (lambda (name)
