@@ -373,6 +373,13 @@
 (define get_second_operand cadr)
 (define get_rest_lines cdr)
 
+(define get_all_but_main
+  (lambda (l)
+    (cond
+      ((null? l) '())
+      ((eq? (get_vars l) 'static-function) (rest_vars l))
+      (else (cons (get_op l) (get_all_but_main (rest_vars l)))))))
+
 
 ; ------------------------ STATE STUFF ------------------------
 ; - A scope is the current set of {} that the program is in.  -
