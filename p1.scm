@@ -391,6 +391,7 @@
   (lambda (classes name)
     (cond
       ((null? classes) '())
+      ((null? name) '())
       ((eq? name (caaar classes)) (car classes))
       (else (get_class_from_classes (cdr classes) name)))))
 
@@ -405,12 +406,17 @@
   (lambda (constructor_code)
     (eval_constructor constructor_code (box (get_empty_environment)) (lambda (v) (error "You can't return in a constructor, silly")))))
 
-(define instantiate
+(define instantiate*
   (lambda (classes name)
-    (if (null? (cadar (get_class_from_classes classes name)))
-        (cons '() (cons (create_object_benv (get_operand1 (get_class_from_classes classes name))) '()))
-        (cons (instantiate classes (cadar (get_class_from_classes classes name))) (cons (create_object_benv (get_operand1 (get_class_from_classes classes name))) '())))))
+    (cond
+      ((null? classes) '())
+      ((null? name) '())
+      ((null? (cadar (get_class_from_classes classes name))) (cons '() (cons (create_object_benv (get_operand1 (get_class_from_classes classes name))) '())))
+      (else (cons (instantiate* classes (get_parent_from_class (get_class_from_classes classes name))) (cons '() (cons (create_object_benv (get_operand1 (get_class_from_classes classes name))) '())))))))
+; (instantiate classes (cadar (get_class_from_classes classes name)))
+; (cons (create_object_benv (get_operand1 (get_class_from_classes classes name))) '())))))
 
+(define get_parent_from_class cadar)
 
 (define create_classes
   (lambda (code)
