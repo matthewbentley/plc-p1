@@ -23,7 +23,7 @@
       ((null? benv) '())
       ((null? program) (error 'nullprogram "No program was given what is even happening?"))
       (else (M_value_funcall (get_main (get_class_from_classes (create_classes program) class_name)) benv default_break default_continue default_throw return*
-                             (create_classes program) class_name (instantiate* (create_classes program) class_name))))))
+                             (create_classes program) class_name '())))))
 
 (define get_main caddr)
 (define get_opperand3 cadddr)
