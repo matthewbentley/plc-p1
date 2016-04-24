@@ -200,6 +200,20 @@
         (error 'var "Undeclared var")
         (replace_in_benv benv (get_operand1 assign) (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance)))))
 
+;(define M_state_assign
+;  (lambda (assign benv break continue throw return classes current_class instance*)
+;    (cond
+;      ((atom? (get_operand1 assign)) (assign_atom assign benv break continue throw return classes current_class instance*))
+;      ((and (list? 
+;
+;(define assign_dot
+;  (lambda (assign benv break continue throw return classes current_class instance*)
+;    (
+;
+;(define assign_atom
+;  (lambda (assign benv break continue throw return classes current_class instance*)
+;    (
+
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
 (define M_value_assign
   (lambda (assign benv break continue throw return* classes current_class instance)
@@ -359,7 +373,7 @@
 (define get_operand2 caddr)
 (define get_operand3 cadddr)
 
-; ------------------------ current_class STUFF ------------------------
+; ------------------------ CLASS STUFF ------------------------
 
 (define get_main_from_code
   (lambda (code)
@@ -407,23 +421,23 @@
       (else (get_class_from_classes (cdr classes) name)))))
 
 (define eval_constructor
-  (lambda (program benv return*)
+  (lambda (program benv return* classes name)
     (cond
       ((null? benv) '())
       ((null? program) benv)
-      (else (eval_constructor (rest_lines program) (M_state (first_line program) benv default_break default_continue default_throw return* classes current_class instance) return*)))))
+      (else (eval_constructor (rest_lines program) (M_state (first_line program) benv default_break default_continue default_throw return* classes name '()) return* classes name)))))
 
 (define create_object_benv
-  (lambda (constructor_code)
-    (eval_constructor constructor_code (box (get_empty_environment)) (lambda (v) (error "You can't return in a constructor, silly")))))
+  (lambda (constructor_code classes name)
+    (eval_constructor constructor_code (box (get_empty_environment)) (lambda (v) (error "You can't return in a constructor, silly")) classes name)))
 
 (define instantiate*
   (lambda (classes name)
     (cond
       ((null? classes) '())
       ((null? name) '())
-      ((null? (cadar (get_class_from_classes classes name))) (cons '() (cons (create_object_benv (get_operand1 (get_class_from_classes classes name))) '())))
-      (else (cons (instantiate* classes (get_parent_from_class (get_class_from_classes classes name))) (cons '() (cons (create_object_benv (get_operand1 (get_class_from_classes classes name))) '())))))))
+      ((null? (cadar (get_class_from_classes classes name))) (cons '() (cons (create_object_benv (get_operand1 (get_class_from_classes classes name)) classes name) '())))
+      (else (cons (instantiate* classes (get_parent_from_class (get_class_from_classes classes name))) (cons '() (cons (create_object_benv (get_operand1 (get_class_from_classes classes name)) classes name) '())))))))
 ; (instantiate classes (cadar (get_class_from_classes classes name)))
 ; (cons (create_object_benv (get_operand1 (get_class_from_classes classes name))) '())))))
 
