@@ -196,7 +196,7 @@
 (define M_state_assign
   (lambda (assign benv break continue throw return classes current_class instance*)
     (if (not (in_benv? (get_operand1 assign) benv))
-        (error 'var "Undeclared var")
+        (assign_in_object assign benv break continue throw return classes current_class instance*)
         (replace_in_benv benv (get_operand1 assign) (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance)))))
 
 ;(define M_state_assign
@@ -205,13 +205,17 @@
 ;      ((atom? (get_operand1 assign)) (assign_atom assign benv break continue throw return classes current_class instance*))
 ;      ((and (list? 
 ;
-;(define assign_dot
-;  (lambda (assign benv break continue throw return classes current_class instance*)
-;    (
-;
-;(define assign_atom
-;  (lambda (assign benv break continue throw return classes current_class instance*)
-;    (
+
+(define get_benv_from_object cadr)
+(define get_parent_from_object car)
+
+(define assign_in_object
+  (lambda (assign benv break continue throw return classes current_class instance*)
+    (cond
+      ((null? current_class) (error "Var not found. You should go home and rethink your life"))
+      ((in_benv? (get_benv_from_object instance*) (get_operand1 assign)) (replace_in_benv (get_benv_from_object instance*) (get_operand1 assign)
+                                                                                          (M_value (get_operand2 assign) (get_benv_from_object instance*) break continue throw return* classes current_class instance)))
+      (else (assign_in_object assign benv break continue throw return classes (cadar (get_class_from_classes classes current_class)) (get_parent_from_object instance*))))))
 
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
 (define M_value_assign
