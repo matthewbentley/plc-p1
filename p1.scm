@@ -21,16 +21,16 @@
   (lambda (program benv return*)
     (cond
       ((null? benv) '())
-      ((null? program) (M_value_funcall '(funcall main) benv default_brace default_continue default_throw return*))
-      (else (outer_evaluate (rest_lines program) (M_state (first_line program) benv default_break default_continue default_throw return*) return*)))))
+      ((null? program) (M_value_funcall '(funcall main) benv default_brace default_continue default_throw return* classes current_class instance))
+      (else (outer_evaluate (rest_lines program) (M_state (first_line program) benv default_break default_continue default_throw return* classes current_class instance) return*)))))
 
 ; benv: boxed env; env: env
 (define evaluate
-  (lambda (program benv brace break continue throw return*)
+  (lambda (program benv brace break continue throw return* classes current_class instance)
     (cond
       ((null? benv) '())
       ((null? program) (brace benv))
-      (else (evaluate (rest_lines program) (M_state (first_line program) benv break continue throw return*) brace break continue throw return*)))))
+      (else (evaluate (rest_lines program) (M_state (first_line program) benv break continue throw return* classes current_class instance) brace break continue throw return* classes current_class instance)))))
 
 ; first_line: gets the first line of the program from the parsed out list
 (define first_line car)
@@ -39,13 +39,13 @@
 
 ; M_state:
 (define M_state
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (cond
       ((null? expression) benv) ; make '() a nop
       ((number? expression) benv) ; No change in state from a number
       ((bool? expression) benv) ; No change in state from a bool
       ((not (list? expression)) benv) ; No change in state from accessing a variable
-      (else ((state_dispatch (get_op expression)) expression benv break continue throw return*)))))
+      (else ((state_dispatch (get_op expression)) expression benv break continue throw return* classes current_class instance)))))
 
 (define expressions
   (lambda ()
@@ -69,18 +69,23 @@
       ((eq? keyword 'throw) M_state_throw)
       ((eq? keyword 'funcall) M_state_funcall)
       ((eq? keyword 'function) M_state_function)
+      ((eq? keyword 'new) M_state_nop)
       ((member keyword (expressions)) M_state_exp)
       (else keyword))))
 ;      (else (error 'keyword "Unknown or unimplemented keyword")))))
 
+(define M_state_nop
+  (lambda (expression benv break continue throw return* classes current_class intance)
+    benv))
+
 (define M_state_funcall
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (begin
-      (M_value_funcall expression benv break continue throw return*)
+      (M_value_funcall expression benv break continue throw return* classes current_class instance)
       benv)))
 ; M_value:
 (define M_value
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (cond
       ((null? expression) (error 'null "You cannot get the value of null"))
       ((number? expression) expression)
@@ -88,7 +93,7 @@
       ((eq? expression 'true) #t)
       ((eq? expression 'false) #f)
       ((not (list? expression)) (get_from_env benv expression))
-      (else ((value_dispatch (get_op expression)) expression benv break continue throw return*)))))
+      (else ((value_dispatch (get_op expression)) expression benv break continue throw return* classes current_class instance)))))
 
 ; value_dispatch: returns the proper value function given the keyword from M_value
 (define value_dispatch
@@ -100,6 +105,7 @@
       ((eq? keyword 'if) (error 'no_value "If cannot be used as a value"))
       ((eq? keyword 'while) (error 'no_value "While cannot be used as a value"))
       ((eq? keyword 'funcall) M_value_funcall)
+      ((eq? keyword 'new) M_value_new)
       ((member keyword (expressions)) M_value_exp)
       (else (error keyword "Unknown or unimplemented keyword")))))
 
@@ -110,15 +116,15 @@
         (error 'mismatch "Mismatched parameter length"))))
 
 ;(define evaluate
-;  (lambda (program benv brace break continue throw return*)
+;  (lambda (program benv brace break continue throw return* classes current_class instance)
 
 (define make_closure
   (lambda (benv parameter_names code)
-    (lambda (parameter_values _benv break continue throw return*)
+    (lambda (parameter_values _benv break continue throw return* classes current_class instance)
       (call/cc
        (lambda (brace)
          (evaluate code (box (add_state_to_environment (state_from_names_values parameter_names parameter_values) (unbox benv)))
-                   brace default_break default_continue throw return*))))))
+                   brace default_break default_continue throw return* classes current_class instance))))))
 
 
 ;code '())))))
@@ -127,7 +133,7 @@
 ;  closure: (cons benv (cons parameters (cons code '())))
 ;  code is a _function_ in the form (call_me '(parameters) benv break continue throw return*) that returns the value returned
 (define M_state_function
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (add_to_benv benv (get_operand1 expression) (make_closure benv (get_operand2 expression) (get_operand3 expression)))))
 
 (define get_parameter_list cddr)
@@ -135,35 +141,35 @@
 ; M_value_funcall: probably similar to M_state_begin, but returns a value at the end
 ;  The replacing functions should take side efffects into account (I hope)
 (define M_value_funcall
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (call/cc
      (lambda (_return)
-       ((get_from_env benv (get_operand1 expression)) (map (lambda (m) (M_value m benv break continue throw return*)) (get_parameter_list expression)) benv break continue throw _return)))))
+       ((get_from_env benv (get_operand1 expression)) (map (lambda (m) (M_value m benv break continue throw return* classes current_class instance)) (get_parameter_list expression)) benv break continue throw _return)))))
 
 ; M_state_begin: implemented for (begin ...) calls; (M_state_begin '(begin <expression>) state) -> state
 (define M_state_begin
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (call/cc
      (lambda (brace)
        (let ((_begin (lambda (b c)
-                       (remove_narrow_scope_benv (evaluate (get_body expression) (add_narrow_scope_benv benv) brace b c throw return*))))) 
+                       (remove_narrow_scope_benv (evaluate (get_body expression) (add_narrow_scope_benv benv) brace b c throw return* classes current_class instance))))) 
          (_begin (lambda (benv) (brace (break benv))) (lambda (benv) (brace (continue benv)))))))))
 
 (define get_body cdr)
 
 ; The finally part of a try/catch/finally block.  Very similar to M_state_begin
 (define M_state_finally
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (call/cc
      (lambda (brace)
-       (evaluate (get_operand1 expression) (construct_state_benv (get_empty_scope) benv) brace break continue throw return*)))))
+       (evaluate (get_operand1 expression) (construct_state_benv (get_empty_scope) benv) brace break continue throw return* classes current_class instance)))))
 
 ; The catch part of try/catch/finally. Very similar to M_state_begin
 (define M_state_catch
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (call/cc
      (lambda (brace)
-       (evaluate (get_operand2 expression) (construct_state_benv (get_empty_scope) benv) brace break continue throw return*)))))
+       (evaluate (get_operand2 expression) (construct_state_benv (get_empty_scope) benv) brace break continue throw return* classes current_class instance)))))
 ; M_state_brace: implemented for (begin ...) calls; (M_state_brace '(begin <expression>) state) -> state
 (define M_state_brace
   (lambda (expression benv)
@@ -173,11 +179,11 @@
 
 ; M_state_var: implemented for (var ...) calls; (M_state_var '(var name) state) | (M_state_var '(var name <expression>) state) -> state
 (define M_state_var
-  (lambda (declare benv break continue throw return*)
+  (lambda (declare benv break continue throw return* classes current_class instance)
     (cond
       ((null? (cddr declare)) (add_to_benv benv (get_operand1 declare) '()))
       ((in_state? (get_operand1 declare) (car (unbox benv))) (error 'declare "Cannot declare a var twice"))
-      (else (add_to_benv (M_state (get_operand2 declare) benv break continue throw return*) (get_operand1 declare) (M_value (get_operand2 declare) benv break continue throw return*))))))
+      (else (add_to_benv (M_state (get_operand2 declare) benv break continue throw return* classes current_class instance) (get_operand1 declare) (M_value (get_operand2 declare) benv break continue throw return* classes current_class instance))))))
 
 ; M_value_var: implemented for (var ...) calls; (M_value_var '(var name)) | (M_value_var '(var name <expression>)) -> value
 (define M_value_var
@@ -188,23 +194,27 @@
 
 ; M_state_assign: implemented for (= ...) calls; (M_state_assign '(= name <expression>) state) -> state
 (define M_state_assign
-  (lambda (assign benv break continue throw return*)
+  (lambda (assign benv break continue throw return classes current_class instance*)
     (if (not (in_benv? (get_operand1 assign) benv))
         (error 'var "Undeclared var")
-        (replace_in_benv benv (get_operand1 assign) (M_value (get_operand2 assign) benv break continue throw return*)))))
+        (replace_in_benv benv (get_operand1 assign) (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance)))))
 
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
 (define M_value_assign
-  (lambda (assign benv break continue throw return*)
-    (M_value (get_operand2 assign) benv break continue throw return*)))
+  (lambda (assign benv break continue throw return* classes current_class instance)
+    (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance)))
+
+(define M_value_new
+  (lambda (name benv break continue throw return* classes current_class instance)
+    (instantiate* classes (get_operand1 name))))
 
 ; M_value_exp: 
 (define M_value_exp
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (cond
-      ((and (eq? (get_op expression) '-) (null? (cddr expression))) (* -1 (M_value (get_operand1 expression) benv break continue throw return*)))
-      ((eq? (get_op expression) '!) (error_not (M_value (get_operand1 expression) benv break continue throw return*)))
-      (else ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) benv break continue throw return*) (M_value (get_operand2 expression) (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return*))))))
+      ((and (eq? (get_op expression) '-) (null? (cddr expression))) (* -1 (M_value (get_operand1 expression) benv break continue throw return* classes current_class instance)))
+      ((eq? (get_op expression) '!) (error_not (M_value (get_operand1 expression) benv break continue throw return* classes current_class instance)))
+      (else ((get_exp_op (get_op expression)) (M_value (get_operand1 expression) benv break continue throw return* classes current_class instance) (M_value (get_operand2 expression) (M_state (get_operand1 expression) benv break continue throw return* classes current_class instance) break continue throw return* classes current_class instance))))))
 
 ; get_exp_op: returns the functions for any expression
 (define get_exp_op
@@ -232,10 +242,10 @@
 
 ; M_state_exp: the expression itself doesn't change the state, but the values operated on might
 (define M_state_exp
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (if (or (and (eq? (get_op expression) '-) (null? (cddr expression))) (eq? (get_op expression) '!))
-        (M_state (get_operand1 expression) benv break continue throw return*)
-        (M_state (get_operand2 expression) (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return*))))
+        (M_state (get_operand1 expression) benv break continue throw return* classes current_class instance)
+        (M_state (get_operand2 expression) (M_state (get_operand1 expression) benv break continue throw return* classes current_class instance) break continue throw return* classes current_class instance))))
 
 ; error_and: basic error catching and function in case of nonbooleans
 (define error_and
@@ -265,39 +275,39 @@
 
 ; M_state_if: implemented for (if ...); (M_state_if '(if <condition> <expression>) state) | (M_state_if '(<condition> <expression> <expression>) state) -> state
 (define M_state_if
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (cond
-      ((M_value (get_operand1 expression) benv break continue throw return*)
+      ((M_value (get_operand1 expression) benv break continue throw return* classes current_class instance)
        (M_state (get_operand2 expression)
-                (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return*))
+                (M_state (get_operand1 expression) benv break continue throw return* classes current_class instance) break continue throw return* classes current_class instance))
       ((not (null? (cdddr expression)))
        (M_state (get_operand3 expression)
-                (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return*))
+                (M_state (get_operand1 expression) benv break continue throw return* classes current_class instance) break continue throw return* classes current_class instance))
       (else benv))))
 
 ; M_state_while: implemented for (while ...); (M_state_while '(while <condition> <expression>) state) -> state
 (define M_state_while
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (call/cc
      (lambda (_break)
        (letrec ((loop (lambda (expression benv)
-                        (if (M_value (get_operand1 expression) (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return)
+                        (if (M_value (get_operand1 expression) (M_state (get_operand1 expression) benv break continue throw return* classes current_class instance) break continue throw return)
                             (loop expression (remove_narrow_scope_benv (M_state (get_operand2 expression)
-                                                                                (M_state (get_operand1 expression) benv _break continue throw return*)
+                                                                                (M_state (get_operand1 expression) benv _break continue throw return* classes current_class instance)
                                                                                 (lambda (benv) (_break benv))
                                                                                 (lambda (benv) (_break (loop expression benv)))
-                                                                                throw return*)))
-                            (M_state (get_operand1 expression) (M_state (get_operand1 expression) benv break continue throw return*) break continue throw return*)))))
+                                                                                throw return* classes current_class instance)))
+                            (M_state (get_operand1 expression) (M_state (get_operand1 expression) benv break continue throw return* classes current_class instance) break continue throw return* classes current_class instance)))))
          (loop expression benv))))))
 
 ; (continue ...) -> jumps to next iteration of innermost loop
 (define M_state_continue
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (continue (remove_narrow_scope_benv benv))))
 
 ; (break ...) -> jumps out of innermost loop
 (define M_state_break
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (break (remove_narrow_scope_benv benv))))
 
 ; Makes the catch continuation.  If there is not catch block, use next catch "up".  If there is, calling this will call the call/cc for getting out of try, plus the whatever's in the catch block
@@ -313,17 +323,17 @@
 
 ; (try ...) -> if no throw is encountered, return (finally (try)) [sort of]. if throw is found, return (finally (catch (try_until_throw))) [sort of]
 (define M_state_try
-  (lambda (expression benv break continue throw return*)
+  (lambda (expression benv break continue throw return* classes current_class instance)
     (M_state (get_operand3 expression)
              (remove_narrow_scope_benv (call/cc
                                         (lambda (throw_cc)
                                           (M_state (cons 'begin (get_operand1 expression)) benv break continue (M_state_try_catch_helper (get_operand2 expression) benv break continue throw throw_cc return*) return*))))
-             break continue throw return*)))
+             break continue throw return* classes current_class instance)))
 
 ; Actually do the throw
 (define M_state_throw
-  (lambda (expression benv break continue throw return*)
-    (letrec ((e (M_value (get_operand1 expression) benv break continue throw return*)))
+  (lambda (expression benv break continue throw return* classes current_class instance)
+    (letrec ((e (M_value (get_operand1 expression) benv break continue throw return* classes current_class instance)))
       (throw (remove_narrow_scope_benv benv) e))))
 
 ; Pretty printing for true and false
@@ -336,8 +346,8 @@
 
 ; Actually call return on the value of what is being returned
 (define return
-  (lambda (expression benv break continue throw return*)
-    (return* (M_value (get_operand1 expression) benv break continue throw return*))))
+  (lambda (expression benv break continue throw return* classes current_class instance)
+    (return* (M_value (get_operand1 expression) benv break continue throw return* classes current_class instance))))
 
 (define bool?
   (lambda (b)
@@ -348,7 +358,7 @@
 (define get_operand2 caddr)
 (define get_operand3 cadddr)
 
-; ------------------------ CLASS STUFF ------------------------
+; ------------------------ current_class STUFF ------------------------
 
 (define get_main_from_code
   (lambda (code)
@@ -390,7 +400,7 @@
 (define get_class_from_classes
   (lambda (classes name)
     (cond
-      ((null? classes) '())
+      ((null? classes) (error "Not a class"))
       ((null? name) '())
       ((eq? name (caaar classes)) (car classes))
       (else (get_class_from_classes (cdr classes) name)))))
@@ -400,7 +410,7 @@
     (cond
       ((null? benv) '())
       ((null? program) benv)
-      (else (eval_constructor (rest_lines program) (M_state (first_line program) benv default_break default_continue default_throw return*) return*)))))
+      (else (eval_constructor (rest_lines program) (M_state (first_line program) benv default_break default_continue default_throw return* classes current_class instance) return*)))))
 
 (define create_object_benv
   (lambda (constructor_code)
