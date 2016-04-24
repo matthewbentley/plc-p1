@@ -6,11 +6,11 @@
 (load "classParser.scm")
 
 (define interpret
-  (lambda (name)
+  (lambda (name class_name)
     (display_val
      (call/cc
       (lambda (return*)
-        (outer_evaluate (parser name) (box (get_empty_environment)) return*))))))
+        (outer_evaluate (parser name) class_name (box (get_empty_environment)) return*))))))
 
 (define default_break (lambda (v) (error "Break outside of loop")))
 (define default_continue (lambda (v) (error "continue outide of loop")))
@@ -18,11 +18,15 @@
 (define default_brace (lambda (v) v))
 
 (define outer_evaluate
-  (lambda (program benv return*)
+  (lambda (program class_name benv return*)
     (cond
       ((null? benv) '())
-      ((null? program) (M_value_funcall '(funcall main) benv default_brace default_continue default_throw return* classes current_class instance))
-      (else (outer_evaluate (rest_lines program) (M_state (first_line program) benv default_break default_continue default_throw return* classes current_class instance) return*)))))
+      ((null? program) (error 'nullprogram "No program was given what is even happening?"))
+      (else (M_value_funcall (get_main (get_class_from_classes (create_classes program) class_name)) benv default_break default_continue default_throw return*
+                             (create_classes program) class_name '())))))
+
+(define get_main caddr)
+(define get_opperand3 cadddr)
 
 ; benv: boxed env; env: env
 (define evaluate
