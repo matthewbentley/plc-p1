@@ -231,9 +231,15 @@
 ; M_state_assign: implemented for (= ...) calls; (M_state_assign '(= name <expression>) state) -> state
 (define M_state_assign
   (lambda (assign benv break continue throw return classes current_class instance*)
-    (if (not (in_benv? (get_operand1 assign) benv))
-        (assign_in_object assign benv break continue throw return classes current_class instance*)
-        (replace_in_benv benv (get_operand1 assign) (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance)))))
+    (cond
+      ((pair? (get_operand1 assign))
+       (if (not (in_benv? (M_value_dot (get_operand1 assign) benv break continue throw return classes current_class instance*) benv))
+          (assign_in_object assign benv break continue throw return classes current_class instance*)
+          (replace_in_benv benv (M_value_dot (get_operand1 assign) benv break continue throw return classes current_class instance*) (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance))))
+  
+      (else (if (not (in_benv? (get_operand1 assign) benv))
+          (assign_in_object assign benv break continue throw return classes current_class instance*)
+          (replace_in_benv benv (get_operand1 assign) (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance)))))))
 
 ;(define M_state_assign
 ;  (lambda (assign benv break continue throw return classes current_class instance*)
@@ -249,6 +255,19 @@
   (lambda (assign benv break continue throw return classes current_class instance*)
     (cond
       ((null? current_class) (error "Var not found. You should go home and rethink your life"))
+      ((pair? (get_operand1 assign))
+       (cond
+         ((eq? 'this (get_operand1 (get_operand1 assign)))
+             (replace_in_benv (get_benv_from_object instance*)
+                              (get_operand1 (get_operand1 assign))
+                              (M_value (get_operand2 assign) (get_benv_from_object instance*) break continue throw return classes current_class instance*)))
+            ;------
+         ((in_benv? (get_benv_from_object instance*) (get_from_env benv (get_operand1 (get_operand1 assign))))
+          (replace_in_benv (get_benv_from_object instance*)
+                           (get_operand1 (get_operand1 assign))
+                           (M_value (get_operand2 assign) (get_benv_from_object instance*) break continue throw return classes current_class instance*)))
+         (else (assign_in_object assign benv break continue throw return classes (cadar (get_class_from_classes classes current_class)) (get_parent_from_object instance*)))))
+  ;----------- NOT A DOT
       ((in_benv? (get_benv_from_object instance*) (get_operand1 assign)) (replace_in_benv (get_benv_from_object instance*) (get_operand1 assign)
                                                                                           (M_value (get_operand2 assign) (get_benv_from_object instance*) break continue throw return* classes current_class instance)))
       (else (assign_in_object assign benv break continue throw return classes (cadar (get_class_from_classes classes current_class)) (get_parent_from_object instance*))))))
