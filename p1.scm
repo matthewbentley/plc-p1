@@ -75,6 +75,7 @@
       ((eq? keyword 'function) M_state_function)
       ((eq? keyword 'static-function) M_state_function)
       ((eq? keyword 'new) M_state_nop)
+      ((eq? keyword 'dot) M_state_nop)
       ((member keyword (expressions)) M_state_exp)
       (else keyword))))
 ;      (else (error 'keyword "Unknown or unimplemented keyword")))))
@@ -139,23 +140,23 @@
 ; -not in obj, calls find_this on parent
 ; -parent is '(), error
 (define get_field
-  (lambda (field obj classes)
+  (lambda (field obj)
     (cond
       ((eq? '() obj) (error "not instantiated variable/function"))
-      (else (if (in_benv? field (cdr obj))
-          (get_from_benv field (cdr obj))
+      (else (if (in_benv? field (cadr obj))
+          (get_from_env (cadr obj) field)
           (get_field field (car obj)))))))
 
 (define find_obj
   (lambda (obj benv)
       (if (in_benv? obj benv)
-          (get_from_env obj (unbox benv))
-          (error "class not found"))))
+          (get_from_env benv obj))
+          (error "class not found")))
 
 (define M_value_dot
   (lambda (expression benv break continue throw return* classes current_class instance)
     (cond
-      (M_value (get_field (get_operand2 expression) (find_obj (get_operand1 expression) benv))))))
+      (M_value (get_field (get_operand2 expression) (get_from_env benv (get_operand1 expression))) benv break continue throw return* classes current_class instance))))
 ;------
 
 
