@@ -73,14 +73,17 @@
       ((eq? keyword 'throw) M_state_throw)
       ((eq? keyword 'funcall) M_state_funcall)
       ((eq? keyword 'function) M_state_function)
+      ((eq? keyword 'static-function) M_state_function)
       ((eq? keyword 'new) M_state_nop)
+      ((eq? keyword 'dot) M_state_nop)
       ((member keyword (expressions)) M_state_exp)
       (else keyword))))
 ;      (else (error 'keyword "Unknown or unimplemented keyword")))))
 
 (define M_state_nop
   (lambda (expression benv break continue throw return* classes current_class intance)
-    benv))
+    benv)
+  )
 
 (define M_state_funcall
   (lambda (expression benv break continue throw return* classes current_class instance)
@@ -110,8 +113,10 @@
       ((eq? keyword 'while) (error 'no_value "While cannot be used as a value"))
       ((eq? keyword 'funcall) M_value_funcall)
       ((eq? keyword 'new) M_value_new)
+      ((eq? keyword 'static-function) M_value_funcall)
+      ((eq? keyword 'dot) M_value_dot)
       ((member keyword (expressions)) M_value_exp)
-      (else (error keyword "Unknown or unimplemented keyword")))))
+      (else (error "Unknown or unimplemented keyword")))))
 
 (define state_from_names_values
   (lambda (names values)
@@ -130,8 +135,30 @@
          (evaluate code (box (add_state_to_environment (state_from_names_values parameter_names parameter_values) (unbox benv)))
                    brace default_break default_continue throw return* classes current_class instance))))))
 
+;------
+; finds this in obj:
+; -not in obj, calls find_this on parent
+; -parent is '(), error
+(define get_field
+  (lambda (field obj)
+    (cond
+      ((eq? '() obj) (error "not instantiated variable/function"))
+      (else (if (in_benv? field (cadr obj))
+          (get_from_env(cadr obj) field)
+          (get_field field (car obj)))))))
 
-;code '())))))
+(define find_obj
+  (lambda (obj benv)
+      (if (in_benv? obj benv)
+          (get_from_env obj benv)
+          (error "class not found"))))
+
+(define M_value_dot
+  (lambda (expression benv break continue throw return* classes current_class instance)
+    (cond
+      (M_value (get_field (get_operand2 expression) (get_from_env benv (get_operand1 expression))) benv break continue throw return* classes current_class instance))))
+;------
+
 
 ; M_state_function: state call for _defining_ a function. This should add a binding from an atom to a closure to the environment
 ;  closure: (cons benv (cons parameters (cons code '())))
@@ -148,7 +175,9 @@
   (lambda (expression benv break continue throw return* classes current_class instance)
     (call/cc
      (lambda (_return)
-       ((get_from_env benv (get_operand1 expression)) (map (lambda (m) (M_value m benv break continue throw return* classes current_class instance)) (get_parameter_list expression)) benv break continue throw _return)))))
+       (if (eq? (get_operand1 expression) 'main)
+           (evaluate (get_operand3 expression) benv default_brace break continue throw return* classes current_class instance)
+           ((get_from_env benv (get_operand1 expression)) (map (lambda (m) (M_value m benv break continue throw return* classes current_class instance)) (get_parameter_list expression)) benv break continue throw _return))))))
 
 ; M_state_begin: implemented for (begin ...) calls; (M_state_begin '(begin <expression>) state) -> state
 (define M_state_begin
@@ -224,7 +253,12 @@
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
 (define M_value_assign
   (lambda (assign benv break continue throw return* classes current_class instance)
-    (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance)))
+    (cond
+    ((pair? (car (cdr (cdr assign))))
+     (if (eq? (car (car (cdr (cdr assign)))) 'dot)
+         (dot_assign (get_operand2 assign) benv break continue throw return* classes current_class instance)
+         (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance)))
+    (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance))))
 
 (define M_value_new
   (lambda (name benv break continue throw return* classes current_class instance)
