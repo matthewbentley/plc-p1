@@ -144,19 +144,18 @@
     (cond
       ((eq? '() obj) (error "not instantiated variable/function"))
       (else (if (in_benv? field (cadr obj))
-          (get_from_env(cadr obj) field)
+          (get_from_env (cadr obj) field)
           (get_field field (car obj)))))))
 
 (define find_obj
   (lambda (obj benv)
       (if (in_benv? obj benv)
-          (get_from_env obj benv)
-          (error "class not found"))))
+          (get_from_env benv obj))
+          (error "class not found")))
 
 (define M_value_dot
   (lambda (expression benv break continue throw return* classes current_class instance)
-    (cond
-      (M_value (get_field (get_operand2 expression) (get_from_env benv (get_operand1 expression))) benv break continue throw return* classes current_class instance))))
+      (get_field (get_operand2 expression) (get_from_env benv (get_operand1 expression)))))
 ;------
 
 
@@ -253,12 +252,7 @@
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
 (define M_value_assign
   (lambda (assign benv break continue throw return* classes current_class instance)
-    (cond
-    ((pair? (car (cdr (cdr assign))))
-     (if (eq? (car (car (cdr (cdr assign)))) 'dot)
-         (dot_assign (get_operand2 assign) benv break continue throw return* classes current_class instance)
-         (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance)))
-    (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance))))
+    (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance)))
 
 (define M_value_new
   (lambda (name benv break continue throw return* classes current_class instance)
