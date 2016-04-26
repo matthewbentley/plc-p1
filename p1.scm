@@ -192,7 +192,7 @@
                        ((M_value (get_operand1 expression) benv break continue throw return* classes current_class (get_from_env benv (get_operand1 (get_operand1 expression))))
                         (map (lambda (m) (M_value m benv break continue throw return* classes current_class (get_from_env benv (get_operand1 (get_operand1 expression))))) (get_parameter_list expression))
                         benv break continue throw _return classes current_class (get_from_env benv (get_operand1 (get_operand1 expression))))))
-               ((get_from_env benv (get_operand1 expression)))))
+               ((get_from_env benv (get_operand1 expression)) (get_operand1 expression) benv break continue throw return* classes current_class instance)))
            (map (lambda (m) (M_value m benv break continue throw return* classes current_class instance)) (get_parameter_list expression))
            benv break continue throw _return classes current_class instance))))
 
@@ -253,7 +253,7 @@
   
       (else (if (not (in_benv? (get_operand1 assign) benv))
           (assign_in_object assign benv break continue throw return classes current_class instance*)
-          (replace_in_benv benv (get_operand1 assign) (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance)))))))
+          (replace_in_benv benv (get_operand1 assign) (M_value (get_operand2 assign) benv break continue throw return classes current_class instance*)))))))
 
 ;(define M_state_assign
 ;  (lambda (assign benv break continue throw return classes current_class instance*)
