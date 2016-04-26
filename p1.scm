@@ -259,13 +259,13 @@
        (cond
          ((eq? 'this (get_operand1 (get_operand1 assign)))
              (replace_in_benv (get_benv_from_object instance*)
-                              (get_operand1 (get_operand1 assign))
-                              (M_value (get_operand2 assign) (get_benv_from_object instance*) break continue throw return classes current_class instance*)))
+                              (get_operand2 (get_operand1 assign))
+                              (M_value (get_operand2 assign) (if (in_benv? (get_operand2 assign) benv) benv (get_benv_from_object instance*)) break continue throw return classes current_class instance*)))
             ;------
          ((in_benv? (get_benv_from_object instance*) (get_from_env benv (get_operand1 (get_operand1 assign))))
           (replace_in_benv (get_benv_from_object instance*)
-                           (get_operand1 (get_operand1 assign))
-                           (M_value (get_operand2 assign) (get_benv_from_object instance*) break continue throw return classes current_class instance*)))
+                           (get_operand2 (get_operand1 assign))
+                           (M_value (get_operand2 assign) (if (in_benv? (get_operand2 assign) benv) benv (get_benv_from_object instance*)) break continue throw return classes current_class instance*)))
          (else (assign_in_object assign benv break continue throw return classes (cadar (get_class_from_classes classes current_class)) (get_parent_from_object instance*)))))
   ;----------- NOT A DOT
       ((in_benv? (get_benv_from_object instance*) (get_operand1 assign)) (replace_in_benv (get_benv_from_object instance*) (get_operand1 assign)
