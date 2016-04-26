@@ -155,8 +155,7 @@
 
 (define M_value_dot
   (lambda (expression benv break continue throw return* classes current_class instance)
-    (cond
-      (M_value (get_field (get_operand2 expression) (get_from_env benv (get_operand1 expression))) benv break continue throw return* classes current_class instance))))
+      (get_field (get_operand2 expression) (get_from_env benv (get_operand1 expression)))))
 ;------
 
 
@@ -253,12 +252,7 @@
 ; M_value_assign: implemented for (= ...) calls; (M_value_assign '(= name <expression>) state) -> value
 (define M_value_assign
   (lambda (assign benv break continue throw return* classes current_class instance)
-    (cond
-    ((pair? (car (cdr (cdr assign))))
-     (if (eq? (car (car (cdr (cdr assign)))) 'dot)
-         (dot_assign (get_operand2 assign) benv break continue throw return* classes current_class instance)
-         (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance)))
-    (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance))))
+    (M_value (get_operand2 assign) benv break continue throw return* classes current_class instance)))
 
 (define M_value_new
   (lambda (name benv break continue throw return* classes current_class instance)
